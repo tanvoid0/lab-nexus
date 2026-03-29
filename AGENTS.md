@@ -3,3 +3,7 @@
 
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
+
+## UI / UX — icons
+
+When adding or changing UI, **prefer icons for better UX** on navigation, actions, empty states, alerts, and important form areas. Use **Font Awesome** (`@fortawesome/react-fontawesome` + `@fortawesome/free-solid-svg-icons` / `free-regular-svg-icons`); root layout already loads `lib/fontawesome` and FA styles. In server components, wrap icons in a small client component where needed. See the repo-root Cursor rule `.cursor/rules/ui-icons-ux.mdc` for concise patterns.

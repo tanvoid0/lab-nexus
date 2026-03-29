@@ -1,0 +1,11 @@
+# Prisma + MongoDB expect a replica set. After `docker compose up -d`, run once:
+#   docker exec -it lab-nexus-mongo mongosh --eval "rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'localhost:27017' }] })"
+# Then set DATABASE_URL to:
+#   mongodb://127.0.0.1:27017/lab-nexus?replicaSet=rs0
+services:
+  mongo:
+    image: mongo:7
+    container_name: lab-nexus-mongo
+    ports:
+      - "27017:27017"
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]

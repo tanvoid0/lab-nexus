@@ -2,6 +2,9 @@
 
 # dependencies
 /node_modules
+# This project uses pnpm only (see package.json "packageManager").
+package-lock.json
+yarn.lock
 /.pnp
 .pnp.*
 .yarn/*
@@ -12,6 +15,13 @@
 
 # testing
 /coverage
+/playwright-report/
+/test-results/
+/blob-report/
+
+# uploaded assets (keep directory)
+/public/uploads/*
+!/public/uploads/.gitkeep
 
 # next.js
 /.next/
@@ -39,3 +49,5 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+*.xlsx
+*.csv

@@ -1,0 +1,188 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum AssetCondition {
+  WORKING
+  BROKEN
+  IN_REPAIR
+  UNKNOWN
+}
+
+enum AssetOperationalStatus {
+  AVAILABLE
+  MAINTENANCE
+  RETIRED
+}
+
+enum CheckoutStatus {
+  ACTIVE
+  RETURNED
+  OVERDUE
+}
+
+model User {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  email        String   @unique
+  passwordHash String
+  name         String?
+  roles        String[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  checkouts        Checkout[]
+  auditLogs        AuditLog[]
+  custodianAssets  Asset[]           @relation("AssetCustodian")
+  projectMembers   ProjectMember[]
+  notifications    Notification[]
+}
+
+model AssetCategory {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  assets    Asset[]
+}
+
+model Location {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  assets    Asset[]
+}
+
+model Project {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  slug      String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members  ProjectMember[]
+  checkouts Checkout[]
+}
+
+model ProjectMember {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  projectId String   @db.ObjectId
+  userId    String   @db.ObjectId
+  role      String?
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([userId])
+}
+
+model Asset {
+  id                 String                 @id @default(auto()) @map("_id") @db.ObjectId
+  skuOrInternalId    String                   @unique
+  name               String
+  specs              Json?
+  condition          AssetCondition           @default(UNKNOWN)
+  operationalStatus  AssetOperationalStatus   @default(AVAILABLE)
+  quantityTotal      Int                    @default(1)
+  quantityAvailable  Int                    @default(1)
+  notes              String?
+  quoteUrl           String?
+  imagePath          String?
+  trackTag           String?                  @unique
+  acquiredAt         DateTime?
+  categoryId         String?                @db.ObjectId
+  locationId         String?                @db.ObjectId
+  custodianUserId    String?                @db.ObjectId
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  category  AssetCategory? @relation(fields: [categoryId], references: [id])
+  location  Location?      @relation(fields: [locationId], references: [id])
+  custodian User?          @relation("AssetCustodian", fields: [custodianUserId], references: [id])
+
+  units     AssetUnit[]
+  checkouts Checkout[]
+
+  @@index([name])
+  @@index([categoryId])
+  @@index([locationId])
+  @@index([operationalStatus])
+  @@index([condition])
+}
+
+model AssetUnit {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  assetId       String   @db.ObjectId
+  serialNumber  String?
+  imei          String?
+  trackTag      String?  @unique
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  asset     Asset      @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  checkouts Checkout[]
+
+  @@index([assetId])
+}
+
+model Checkout {
+  id             String         @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String         @db.ObjectId
+  assetId        String         @db.ObjectId
+  assetUnitId    String?        @db.ObjectId
+  projectId      String?        @db.ObjectId
+  status         CheckoutStatus @default(ACTIVE)
+  checkedOutAt   DateTime       @default(now())
+  dueAt          DateTime
+  returnedAt     DateTime?
+  purpose        String
+  conditionOut   Json?
+  conditionIn    Json?
+  damageReport   String?
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset     Asset      @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  assetUnit AssetUnit? @relation(fields: [assetUnitId], references: [id])
+  project   Project?   @relation(fields: [projectId], references: [id])
+
+  @@index([userId])
+  @@index([assetId])
+  @@index([status])
+  @@index([dueAt])
+}
+
+model AuditLog {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId     String?  @db.ObjectId
+  entityType String
+  entityId   String
+  action     String
+  diff       Json?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model Notification {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  title     String
+  body      String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+}
