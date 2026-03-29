@@ -41,7 +41,7 @@ export function loadInventorySeedFile(explicitPath?: string): InventorySeedFile 
   const parsedCount = countRaw ? Number.parseInt(countRaw, 10) : Number.NaN;
   const itemCount = Number.isFinite(parsedCount)
     ? Math.max(1, Math.min(500, parsedCount))
-    : 28;
+    : 42;
 
   return buildSyntheticInventorySeed({ itemCount, deterministic });
 }

@@ -5,12 +5,15 @@
 #   docker exec -it lab-nexus-mongo mongosh --eval "rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'localhost:27017' }] })"
 #   # DATABASE_URL in .env → mongodb://127.0.0.1:27017/lab-nexus?replicaSet=rs0
 #
+# If host ports are busy: LAB_NEXUS_MONGO_HOST_PORT=27018 LAB_NEXUS_APP_HOST_PORT=3001 docker compose ...
+#
 # Full stack (credentials from .env; DATABASE_URL is overridden inside the app container only):
 #   cp .env.example .env   # set AUTH_SECRET, CRON_SECRET, etc.
 #   docker compose --profile full up -d --build
-#   docker compose exec app npx prisma db push
-#   docker compose exec app npx tsx prisma/seed.ts
-#   open http://localhost:3000
+#   First-time DB: the app image has no Prisma CLI; from repo on host (Mongo URL = published port):
+#     DATABASE_URL="mongodb://127.0.0.1:${LAB_NEXUS_MONGO_HOST_PORT:-27017}/lab-nexus?replicaSet=rs0&directConnection=true" pnpm exec prisma db push
+#     DATABASE_URL="mongodb://127.0.0.1:${LAB_NEXUS_MONGO_HOST_PORT:-27017}/lab-nexus?replicaSet=rs0&directConnection=true" pnpm exec tsx prisma/seed.ts
+#   open http://localhost:${LAB_NEXUS_APP_HOST_PORT:-3000}
 #
 # If you switch between "mongo-only" and "full stack" on the same volume, reset Mongo data if replica set errors appear:
 #   docker compose down -v
@@ -20,7 +23,7 @@ services:
     image: mongo:7
     container_name: lab-nexus-mongo
     ports:
-      - "27017:27017"
+      - "${LAB_NEXUS_MONGO_HOST_PORT:-27017}:27017"
     command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
     volumes:
       - lab-nexus-mongo-data:/data/db
@@ -45,19 +48,45 @@ services:
       - --eval
       - "try { rs.status() } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'mongo:27017' }] }); }"
 
+  seed:
+    profiles: [full]
+    build:
+      context: .
+      target: builder
+    container_name: lab-nexus-seed
+    env_file:
+      - .env
+    environment:
+      # Override host-oriented DATABASE_URL so the seed container reaches the mongo service.
+      DATABASE_URL: mongodb://mongo:27017/lab-nexus?replicaSet=rs0&directConnection=true
+      # Use fixed demo password so app + tests stay consistent across container rebuilds.
+      CI: "true"
+      # Seed scripts refuse NODE_ENV=production.
+      NODE_ENV: development
+    depends_on:
+      mongo-init:
+        condition: service_completed_successfully
+    # Gate + seed (runs only if sentinel data is missing).
+    command: ["./node_modules/.bin/tsx", "prisma/seed-gate.ts"]
+    restart: "no"
+
   app:
     profiles: [full]
     build: .
     container_name: lab-nexus-app
     ports:
-      - "3000:3000"
+      - "${LAB_NEXUS_APP_HOST_PORT:-3000}:3000"
     env_file:
       - .env
     environment:
       # Override host-oriented DATABASE_URL so the container reaches the mongo service.
       DATABASE_URL: mongodb://mongo:27017/lab-nexus?replicaSet=rs0&directConnection=true
+      # Keep dev quick-login/password consistent with the seed gate.
+      CI: "true"
     depends_on:
       mongo-init:
+        condition: service_completed_successfully
+      seed:
         condition: service_completed_successfully
     healthcheck:
       test:

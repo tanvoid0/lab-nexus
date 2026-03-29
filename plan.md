@@ -46,11 +46,11 @@ High-level themes; details stay in code and `README.md`.
 | Cron route: burst limit + stricter limit on failed Bearer | Done |
 | `GET /api/health` (liveness + `assistant.active` / `assistant.configured`), `GET /api/health/ready` (Mongo ping + same assistant flags); per‑IP rate limits on health/QR/assistant/dev seed/AI pre‑auth (`lib/api/rate-limit-http.ts`) | Done |
 | Security headers in `next.config.ts` | Done |
-| **Docker Compose**: `docker-compose.yml` (Mongo + named volume); **`docker compose --profile full`** builds/runs **`Dockerfile`** (Next **standalone**), injects **`.env`** (`env_file`), overrides **`DATABASE_URL`** to **`mongo`**; one-shot **`mongo-init`** replica set for in-compose networking — see **README** | Done |
+| **Docker Compose**: `docker-compose.yml` (Mongo + named volume); **`docker compose --profile full`** builds/runs **`Dockerfile`** (Next **standalone**), injects **`.env`** (`env_file`), overrides **`DATABASE_URL`** to **`mongo`**; **`mongo-init`** + gated **`seed`** (`prisma/seed-gate.ts`) + **`app`** — see **README** (Docker-first setup) | Done |
 | Playwright smoke (`e2e/smoke.spec.ts`) + optional auth test (`e2e/auth-flow.spec.ts` + `E2E_*` env); run locally (`pnpm dev` + Mongo + seed) | Done |
 | Admin **Analytics** page (30-day checkouts, by category, top borrowers, by status); charts via **Recharts** (bar, donut, pie, horizontal bar) themed from CSS variables; **Dashboard** (ADMIN/RESEARCHER) embeds checkout **status donut** + **7-day checkout bar** with link to full analytics; pie/legend layout avoids overlapping labels | Done |
 | **Prisma CLI**: `prisma.config.ts` for seed (no deprecated `package.json#prisma`); `import "dotenv/config"` so `DATABASE_URL` resolves when the CLI skips auto `.env` | Done |
-| **Public-clone hygiene**: `.gitignore` allows committing `.env.example` while ignoring `.env`; seed upserts **synthetic** bulk inventory unless `prisma/data/inventory-seed.json` / `INVENTORY_SEED_JSON` is provided; first local seed can persist a **random** demo password to gitignored `prisma/.seed-demo-credentials.json` (set `SEED_DEMO_PASSWORD` when you need a known value, e.g. for E2E) | Done |
+| **Public-clone hygiene**: `.gitignore` allows committing `.env.example` while ignoring `.env`; seed upserts **synthetic** bulk inventory (richer categories/locations, **condition / operational status** mix, **42** default rows unless `INVENTORY_SEED_ITEM_COUNT` / JSON file) unless `prisma/data/inventory-seed.json` / `INVENTORY_SEED_JSON` is provided; **second demo project** (profile fields) + optional **pending checkout request** when `SYN-INV-*` rows exist; first local seed can persist a **random** demo password to gitignored `prisma/.seed-demo-credentials.json` (set `SEED_DEMO_PASSWORD` when you need a known value, e.g. for E2E) | Done |
 | **Modular UI / lib**: shared `components/form/field-error`, `lib/reference/merge-lookup-options`, `lib/audit/entity-href`, `actionFailureMessage()` in `lib/form/action-result`; admin **audit trail** split into `audit-trail-filters` / `audit-trail-table` (barrel `audit-trail.tsx`); **reference data** under `components/admin/reference-data/` with barrel import | Done |
 
 ---
@@ -271,8 +271,8 @@ Cursor / agent sessions: follow `.cursor/rules/plan-md-maintenance.mdc` and the 
 
 | File | Role |
 |------|------|
-| [`README.md`](./README.md) | Local setup (Docker Mongo, optional **Compose profile `full`** + [`Dockerfile`](./Dockerfile)), env, seed, deployment notes; **`pnpm db:reset`** when schema/seed changes |
-| [`docker-compose.yml`](./docker-compose.yml), [`Dockerfile`](./Dockerfile) | Mongo + volume; **`--profile full`** → `mongo-init` + `app` (env from **`.env`**, in‑container `DATABASE_URL` → `mongo`) |
+| [`README.md`](./README.md) | **Docker-first** local setup (**Compose profile `full`**, optional Mongo-only + `pnpm dev`), env, seed, deployment notes; manual **`pnpm db:reset`** when schema/seed changes on host workflows |
+| [`docker-compose.yml`](./docker-compose.yml), [`Dockerfile`](./Dockerfile) | Mongo + persistent volume; **`--profile full`** → `mongo-init`, one-shot **`seed`** (`prisma/seed-gate.ts`), **`app`** ([`Dockerfile`](./Dockerfile) standalone); optional **`LAB_NEXUS_*_HOST_PORT`** overrides |
 | [`.cursor/rules/database-seed-reset.mdc`](./.cursor/rules/database-seed-reset.mdc) | Agent rule: fresh reseed + `clear-database.ts` when entities change |
 | [`.env.example`](./.env.example) | Variable templates |
 | `lib/ai/*`, `app/api/ai/chat/route.ts`, `components/assistant/staff-assistant-panel.tsx` | Optional Lab assistant (all lab roles): Gemini client, Zod-validated tool registry, orchestration (max tool rounds), chat API + toolbar sheet — see **§1 → Ops** and **§3 → AI assistant integration** |

@@ -78,108 +78,100 @@ Next.js 16, React 19, Tailwind 4, Prisma 6 + MongoDB, Auth.js (credentials + JWT
 
 ## Prerequisites
 
-- **Node.js** 20 or newer (22 is a good default).
-- **pnpm** 10 — the repo pins it via Corepack (`package.json` → `packageManager`).
-- **MongoDB** as a **replica set** (single-node RS is fine locally). Easiest path: **Docker** + [`docker-compose.yml`](./docker-compose.yml). **Atlas** is supported for hosted deployments—use the URI Atlas gives you (do not paste a random `replicaSet=rs0` from local docs onto the Atlas string).
+- **Docker** — easiest way to run the app + database together ([`docker-compose.yml`](./docker-compose.yml)).
+- **Node.js 20+** and **pnpm 10** — needed for `pnpm dev` and other scripts ([`package.json`](./package.json) `packageManager`).
+- **MongoDB as a replica set** — Compose gives you one locally; for cloud, use **Atlas** and the connection string they provide (don’t mix in local-only `replicaSet=` query params).
 
 ---
 
 ## Local setup
 
-Follow these steps once per machine (from the **repo root**).
+Work from the **repo root**. **Try Docker first**; use the manual path if you prefer `pnpm dev` with hot reload or you already have Mongo elsewhere.
 
-### 1. Install dependencies
-
-```bash
-corepack enable
-corepack prepare pnpm@10.33.0 --activate
-pnpm install
-```
-
-`postinstall` runs **`prisma generate`**.
-
-### 2. Configure environment
+### Step 0 — Environment file (every path)
 
 ```bash
 cp .env.example .env
 ```
 
-Edit **`.env`** and set at least:
+Set at least **`AUTH_SECRET`**, **`CRON_SECRET`**, and **`DATABASE_URL`** (details in [`.env.example`](./.env.example)).
 
-| Variable | Purpose |
-|----------|---------|
-| `DATABASE_URL` | MongoDB replica-set URI (see below). |
-| `AUTH_SECRET` | Long random secret for Auth.js (e.g. `openssl rand -base64 32`). |
-| `CRON_SECRET` | Secret for `GET /api/cron/overdue` (`Authorization: Bearer …`). |
+| When | `DATABASE_URL` in `.env` |
+|------|---------------------------|
+| **Docker full stack** (`docker compose --profile full`) | Can be a placeholder or Atlas; containers **override** it to talk to the Compose **`mongo`** service. |
+| **`pnpm dev` on your machine** | Must point at **your** Mongo (local or Atlas). |
 
-Optional variables (email, AI, domain restriction, seed overrides) are documented in [`.env.example`](./.env.example).
+If **`DATABASE_URL`** is also set in your **shell**, it wins over `.env` — unset it if things point at the wrong DB.
 
-**Shell vs file:** if `DATABASE_URL` is set in your **shell**, it overrides **`.env`**. For fewer surprises, align shell and `.env` or unset the shell value when working locally.
+---
 
-### 3. Start MongoDB (Docker)
+### Path A — Full stack in Docker (recommended)
 
-By default, **`docker compose up -d`** starts **only MongoDB** (see [`docker-compose.yml`](./docker-compose.yml)). Data is stored in the **`lab-nexus-mongo-data`** volume.
+1. Create **`.env`** (see Step 0).
+2. Start everything:
 
-Initialize the replica set **once** if you run the app **on the host** (`pnpm dev` / `pnpm start`) and connect with `127.0.0.1`:
+   ```bash
+   docker compose --profile full up -d --build
+   ```
+
+3. Open **[http://localhost:3000](http://localhost:3000)**.
+
+**What you get:** MongoDB data is stored in the **`lab-nexus-mongo-data`** volume (survives image rebuilds). The first time the database is empty, Compose runs a **seed** step; after that it skips. Demo sign-in uses **`labnexus123`** unless you set **`SEED_DEMO_PASSWORD`** in `.env`.
+
+**If sign-in redirects act odd on localhost:** add **`AUTH_TRUST_HOST=true`** to `.env`.
+
+**If ports 27017 or 3000 are already in use:**
 
 ```bash
-docker compose up -d
-docker exec -it lab-nexus-mongo mongosh --eval "rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'localhost:27017' }] })"
+LAB_NEXUS_MONGO_HOST_PORT=27018 LAB_NEXUS_APP_HOST_PORT=3000 docker compose --profile full up -d --build
 ```
 
-Point **`DATABASE_URL`** in **`.env`** at that instance, for example:
+(Use the Mongo host port in any **host-side** `prisma` commands — see [`docker-compose.yml`](./docker-compose.yml).)
 
-`mongodb://127.0.0.1:27017/lab-nexus?replicaSet=rs0`
+**If replica-set errors appear** after switching how you run Mongo on the same volume: **`docker compose --profile full down -v`** resets **only** that Compose Mongo data.
 
-#### Run Mongo + Next.js in Docker (full stack)
+**Optional:** from the repo, **`pnpm exec prisma db push`** against `127.0.0.1:<mongo host port>?replicaSet=rs0&directConnection=true` if you want indexes explicitly aligned before you rely on seeding.
 
-Use this when you want the **production server** in a container; it still reads **`AUTH_SECRET`**, **`CRON_SECRET`**, and every other variable from **`.env`** via Compose **`env_file`**. **`DATABASE_URL`** from the file is **overridden inside the app container** so it uses the Compose service hostname **`mongo`** (your host‑side URL is unchanged if you keep using `pnpm dev` separately).
+---
+
+### Path B — Mongo in Docker, app on your machine (`pnpm dev`)
+
+1. **`.env`** with a **local** URI (see Step 0).
+2. Start Mongo and init the replica set **once**:
+
+   ```bash
+   docker compose up -d mongo
+   docker exec -it lab-nexus-mongo mongosh --eval "rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'localhost:27017' }] })"
+   ```
+
+3. Set **`DATABASE_URL`** to something like:  
+   `mongodb://127.0.0.1:27017/lab-nexus?replicaSet=rs0`
+
+4. Continue with **Path C** (install → `db:push` → `db:seed` → `pnpm dev`).
+
+---
+
+### Path C — Manual (no Docker app; Mongo from Compose, Atlas, or elsewhere)
 
 ```bash
-docker compose --profile full up -d --build
-docker compose exec app npx prisma db push
-docker compose exec app npx tsx prisma/seed.ts
-```
-
-Then open [http://localhost:3000](http://localhost:3000).
-
-For Auth.js behind `http://localhost:3000`, set **`AUTH_TRUST_HOST=true`** in **`.env`** if sign‑in redirects misbehave. The **full** profile runs a one‑shot **`mongo-init`** replica‑set bootstrap for the in‑Docker hostname **`mongo:27017`**. If you previously initialized the same volume with **`localhost`** for host‑only dev and hit replica‑set errors, reset the volume: **`docker compose down -v`** (destroys local Mongo data).
-
-The image is built from the repo‑root [`Dockerfile`](./Dockerfile) (**Next.js `standalone`** output).
-
-### 4. Apply schema and seed demo data
-
-```bash
+corepack enable
+corepack prepare pnpm@10.33.0 --activate
+pnpm install
 pnpm db:push
 pnpm db:seed
-```
-
-- **Never** run **`pnpm db:seed`** against **production**: the seed script refuses when `NODE_ENV=production` or `VERCEL_ENV=production`.
-- After **schema or seed script** changes locally, prefer **`pnpm db:reset`** (clear + push + seed) so data stays consistent. Extend **`prisma/clear-database.ts`** if you add new collections.
-
-### 5. Run the dev server
-
-```bash
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Sign in with the seeded accounts:
+Open **[http://localhost:3000](http://localhost:3000)**.
 
-- **Emails:** `admin@lab.local`, `researcher@lab.local`, `student@lab.local` (override with `SEED_*_EMAIL` in `.env` if needed).
-- **Password:** first local seed without `SEED_DEMO_PASSWORD` writes a **random** password to **`prisma/.seed-demo-credentials.json`** (gitignored). Set **`SEED_DEMO_PASSWORD`** in `.env` if you want a known password (e.g. for **`pnpm test:e2e`** with **`E2E_EMAIL`** / **`E2E_PASSWORD`**).
+- **Accounts:** `admin@lab.local`, `researcher@lab.local`, `student@lab.local` (override with `SEED_*_EMAIL` in `.env`).
+- **Password:** without **`SEED_DEMO_PASSWORD`**, the first seed may write a random password to **`prisma/.seed-demo-credentials.json`** (gitignored). Set **`SEED_DEMO_PASSWORD`** for a fixed password (e.g. E2E tests).
+- **Do not** run **`pnpm db:seed`** against production (`NODE_ENV=production` / `VERCEL_ENV=production` are blocked).
+- After **schema or seed** changes locally, **`pnpm db:reset`** is usually easiest (clears, pushes, reseeds).
 
-**Dev quick login:** in **development**, the login form includes **Login as admin / staff / student** (after seed); those controls are not shown on production builds.
+**Production-like run on the host:** `pnpm build` then `pnpm start` (same `.env`).
 
-Bulk inventory from seed is **synthetic** unless you add **`prisma/data/inventory-seed.json`** or **`INVENTORY_SEED_JSON`**.
-
-### 6. Production-like run (optional)
-
-```bash
-pnpm build
-pnpm start
-```
-
-Uses the same **`.env`** as dev; ensure **`DATABASE_URL`** and secrets point at the intended database.
+**Dev quick login** buttons on the login page only appear in **development** builds.
 
 ---
 
@@ -213,10 +205,10 @@ See [`.env.example`](./.env.example) for the full list and comments. Commonly us
 
 ## MongoDB: replica set (why and how)
 
-Prisma expects a **replica set** connection (including a **single-member** set for local dev).
+Prisma expects a **replica set** URI (a single-node replica set is fine for local dev).
 
-- **Docker:** see **§ Local setup** and [`docker-compose.yml`](./docker-compose.yml).
-- **Atlas:** use the **SRV** connection string from the Atlas UI; do not tack on local-only `replicaSet` query params.
+- **Local:** Path A or B above, or [`docker-compose.yml`](./docker-compose.yml).
+- **Atlas:** use the **SRV** string from the Atlas UI — don’t add local-only `replicaSet=` query params.
 
 **Upgrading old databases:** if documents still use legacy Prisma enum fields `condition` / `operationalStatus` on **Asset**, run **`pnpm db:migrate-legacy-enums`** once after `db:push` (stop the dev server first if Windows reports a Prisma file lock).
 

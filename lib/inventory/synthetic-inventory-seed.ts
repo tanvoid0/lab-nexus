@@ -10,6 +10,9 @@ const CATEGORIES = [
   "Storage",
   "Lab & field",
   "Simulation",
+  "Optics & imaging",
+  "Power & cabling",
+  "Calibration fixtures",
 ] as const;
 
 const LOCATION_PREFIXES = [
@@ -19,6 +22,9 @@ const LOCATION_PREFIXES = [
   "Bench",
   "Cabinet",
   "Staging",
+  "Cold storage",
+  "Loading dock",
+  "High bay",
 ] as const;
 
 const PRODUCT_STEMS = [
@@ -32,6 +38,12 @@ const PRODUCT_STEMS = [
   "Telemetry node",
   "Drive-by-wire kit",
   "Bench power unit",
+  "GNSS timing receiver",
+  "IMU characterization stack",
+  "Spectrum analyzer front-end",
+  "Motor driver eval board",
+  "LiDAR alignment jig",
+  "Edge inference box",
 ] as const;
 
 /** Deterministic pseudo-random for CI / reproducible seeds (xorshift32). */
@@ -83,27 +95,39 @@ export function buildSyntheticInventorySeed(
     const variant = `${String.fromCharCode(65 + (i % 26))}${1 + (i % 9)}`;
 
     const sku = `SYN-INV-${String(idx).padStart(3, "0")}`;
-    const name = `${stem} (${variant})`;
+    const cohort = Math.floor((idx - 1) / 10);
+    const name =
+      cohort > 0
+        ? `${stem} (${variant}, batch ${cohort + 1})`
+        : `${stem} (${variant})`;
 
     const row: InventorySeedItem = {
       sku,
       name,
-      qty: 1 + Math.floor(rng() * 3),
+      qty: 1 + Math.floor(rng() * 6),
       location: `${locPrefix} ${locNum}`,
       category: cat,
-      acquiredAt: isoDaysAgo(rng, 800),
       notes:
         idx % 5 === 0
           ? "Synthetic seed row — replace with your lab data via import or admin."
-          : undefined,
+          : idx % 8 === 3
+            ? "Label outer bin; spare cables in nested tray."
+            : undefined,
       quoteUrl: idx % 7 === 0 ? "https://example.com/product-placeholder" : undefined,
     };
 
-    if (idx === 4) {
-      row.condition = "BROKEN";
-    } else if (idx === 11) {
-      row.operationalStatus = "Maintenance";
+    if (idx % 6 !== 1) {
+      row.acquiredAt = isoDaysAgo(rng, 920);
     }
+
+    const mod13 = idx % 13;
+    if (mod13 === 0) row.condition = "BROKEN";
+    else if (mod13 === 3) row.condition = "In repair";
+    else if (mod13 === 6) row.condition = "UNKNOWN";
+
+    const mod11 = idx % 11;
+    if (mod11 === 2) row.operationalStatus = "Maintenance";
+    else if (mod11 === 5) row.operationalStatus = "RETIRED";
 
     items.push(row);
   }

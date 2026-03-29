@@ -1,7 +1,14 @@
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import { hash } from "bcryptjs";
-import { AuditAction, AuditEntityType, CheckoutStatus, PrismaClient } from "@prisma/client";
+import {
+  AuditAction,
+  AuditEntityType,
+  CheckoutRequestLineStatus,
+  CheckoutRequestStatus,
+  CheckoutStatus,
+  PrismaClient,
+} from "@prisma/client";
 import { DEFAULT_LOOKUP_ROWS } from "../lib/reference/lookup-defaults";
 import { ensureDefaultLookupEntries } from "../lib/reference/ensure-lookups";
 import { prepareDemoPasswordForSeed, seedDemoCredentialsPath } from "../lib/dev/demo-credentials";
@@ -22,6 +29,7 @@ const prisma = new PrismaClient();
 const SEED_PURPOSE_ACTIVE_MODEM = "[seed] Active modem loan";
 const SEED_PURPOSE_RETURNED_ROBOT = "[seed] Robot loan (returned)";
 const SEED_PURPOSE_OVERDUE_LIDAR = "[seed] LiDAR loan (overdue)";
+const SEED_PURPOSE_PENDING_REQUEST = "[seed] Pending loan approval (synthetic SKU)";
 
 const MODEM_SEED_NOTES = "Two serialized units for checkout / unit-tag demos.";
 
@@ -253,12 +261,34 @@ async function main() {
   const locBenchA = await ensureLocation("Bench A");
 
   const projectAd = await ensureProject("Autonomous driving", "autonomous-driving");
+  const projectIndoor = await ensureProject(
+    "Indoor navigation benchmark",
+    "indoor-navigation-benchmark",
+  );
+  await prisma.project.updateMany({
+    where: { slug: "indoor-navigation-benchmark", ...notDeleted },
+    data: {
+      description:
+        "Baseline runs for wheel odometry + lidar SLAM in the mock warehouse layout. See bench booklet for marker positions.",
+      webLinks: [
+        {label: "Dataset notes (internal)", url: "https://example.com/nav-bench-notes"},
+        {label: "Layout diagram", url: "https://example.com/warehouse-floorplan"},
+      ],
+      documentLinks: [
+        {label: "Safety checklist PDF", url: "https://example.com/lab-mobil-robot-checklist"},
+      ],
+    },
+  });
 
   if (researcherUser) {
     await ensureProjectMember(projectAd.id, researcherUser.id);
+    await ensureProjectMember(projectIndoor.id, researcherUser.id);
   }
   if (studentUser) {
     await ensureProjectMember(projectAd.id, studentUser.id);
+  }
+  if (admin) {
+    await ensureProjectMember(projectIndoor.id, admin.id);
   }
 
   const robotAsset = await ensureAsset({
@@ -386,6 +416,45 @@ async function main() {
       process.exit(1);
     }
     inventoryUpserted = upserted;
+  }
+
+  const existingPendingSeedRequest = await prisma.checkoutRequest.findFirst({
+    where: {
+      sharedPurpose: SEED_PURPOSE_PENDING_REQUEST,
+      status: CheckoutRequestStatus.PENDING_APPROVAL,
+    },
+  });
+  if (!existingPendingSeedRequest && studentUser) {
+    const pendingLineAsset = await prisma.asset.findFirst({
+      where: {
+        ...notDeleted,
+        quantityAvailable: { gt: 0 },
+        operationalStatusCode: "AVAILABLE",
+        conditionCode: "WORKING",
+        skuOrInternalId: { startsWith: "SYN-INV-" },
+      },
+      orderBy: { skuOrInternalId: "asc" },
+    });
+    if (pendingLineAsset) {
+      await prisma.checkoutRequest.create({
+        data: {
+          userId: studentUser.id,
+          status: CheckoutRequestStatus.PENDING_APPROVAL,
+          defaultProjectId: projectAd.id,
+          sharedPurpose: SEED_PURPOSE_PENDING_REQUEST,
+          sharedDueAt: new Date(Date.now() + 10 * 86_400_000),
+          conditionOut: {note: "For SLAM comparison week — classroom bench only."},
+          lines: {
+            create: [
+              {
+                assetId: pendingLineAsset.id,
+                status: CheckoutRequestLineStatus.PENDING,
+              },
+            ],
+          },
+        },
+      });
+    }
   }
 
   const seededLoans = await prisma.checkout.findFirst({
@@ -643,7 +712,7 @@ async function main() {
     `Spreadsheet inventory: ${inventoryUpserted} assets upserted (${useInventorySeedApi ? "via POST /api/dev/inventory-seed" : "in-process; same validation as that route"}). JSON items may set optional "condition" / "operationalStatus" (code or label).`,
   );
   console.log(
-    "Demo data: project members (researcher + student), LiDAR asset + overdue checkout + notification, active modem unit checkout, returned robot loan, /admin/audit sample rows (first run only per DB).",
+    "Demo data: two projects (one with rich profile JSON), project members, optional pending student loan request when synthetic SKUs exist, LiDAR + overdue + notification, active modem checkout, returned robot loan, /admin/audit sample rows (first run only per DB).",
   );
 }
 
