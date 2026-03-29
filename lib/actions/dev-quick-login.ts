@@ -4,8 +4,9 @@ import { signIn } from "@/auth";
 import { failure, type ActionResult } from "@/lib/form/action-result";
 import {
   DEMO_ADMIN_EMAIL,
-  DEMO_PASSWORD_PLAINTEXT,
   DEMO_STAFF_EMAIL,
+  DEMO_STUDENT_EMAIL,
+  getDemoPasswordPlain,
 } from "@/lib/dev/demo-auth";
 import { getRequestIp } from "@/lib/request-ip";
 import { rateLimit } from "@/lib/rate-limit";
@@ -15,7 +16,7 @@ import { redirect } from "next/navigation";
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 30;
 
-export type DevQuickLoginPreset = "admin" | "staff";
+export type DevQuickLoginPreset = "admin" | "staff" | "student";
 
 export async function devQuickLoginAction(
   preset: DevQuickLoginPreset,
@@ -34,12 +35,17 @@ export async function devQuickLoginAction(
     });
   }
 
-  const email = preset === "admin" ? DEMO_ADMIN_EMAIL : DEMO_STAFF_EMAIL;
+  const email =
+    preset === "admin"
+      ? DEMO_ADMIN_EMAIL
+      : preset === "staff"
+        ? DEMO_STAFF_EMAIL
+        : DEMO_STUDENT_EMAIL;
 
   try {
     const result = await signIn("credentials", {
       email,
-      password: DEMO_PASSWORD_PLAINTEXT,
+      password: getDemoPasswordPlain(),
       redirect: false,
     });
     if (result && typeof result === "object" && "error" in result && result.error) {
@@ -55,5 +61,5 @@ export async function devQuickLoginAction(
     throw e;
   }
 
-  redirect("/inventory");
+  redirect("/");
 }

@@ -1,17 +1,26 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { notDeleted } from "@/lib/prisma/active-scopes";
 import { toAssetListItem } from "@/lib/mappers/asset";
-import { hasAnyRole } from "@/lib/auth/roles";
+import { hasAnyRole, LAB_ROLES, LAB_ROLES_STAFF } from "@/lib/auth/roles";
 import { auth } from "@/auth";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NATIVE_SELECT_CLASSES } from "@/lib/form/native-field-classes";
 import { InventoryNewAssetLink } from "@/components/inventory/inventory-new-asset-link";
-import { ConditionBadge, OperationalBadge } from "@/components/inventory/asset-status-badge";
-import type { AssetCondition, AssetOperationalStatus } from "@prisma/client";
+import { InventoryEmptyPanel } from "@/components/inventory/inventory-empty-panel";
+import { InventoryAssetTable } from "@/components/inventory/inventory-asset-table";
+import {
+  listActiveLookupsByDomain,
+  loadLookupLabelMaps,
+} from "@/lib/reference/lookup-label-maps";
+import type { AssetCategory, Location, Project } from "@prisma/client";
 
 type SearchParams = Promise<{
   q?: string;
   categoryId?: string;
   locationId?: string;
+  projectId?: string;
   condition?: string;
   status?: string;
 }>;
@@ -20,10 +29,12 @@ export default async function InventoryPage({ searchParams }: { searchParams: Se
   const session = await auth();
   const sp = await searchParams;
   const q = sp.q?.trim();
-  const canEdit = hasAnyRole(session?.user?.roles, ["ADMIN", "RESEARCHER"]);
+  const canEdit = hasAnyRole(session?.user?.roles, LAB_ROLES_STAFF);
+  const canUseCart = hasAnyRole(session?.user?.roles, LAB_ROLES);
 
   const where = {
     AND: [
+      { ...notDeleted },
       q
         ? {
             OR: [
@@ -35,22 +46,52 @@ export default async function InventoryPage({ searchParams }: { searchParams: Se
         : {},
       sp.categoryId ? { categoryId: sp.categoryId } : {},
       sp.locationId ? { locationId: sp.locationId } : {},
-      sp.condition ? { condition: sp.condition as AssetCondition } : {},
-      sp.status ? { operationalStatus: sp.status as AssetOperationalStatus } : {},
+      sp.projectId ? { projectId: sp.projectId } : {},
+      sp.condition ? { conditionCode: sp.condition } : {},
+      sp.status ? { operationalStatusCode: sp.status } : {},
     ],
   };
 
-  const [assets, categories, locations] = await Promise.all([
+  const [
+    assets,
+    categories,
+    locations,
+    projects,
+    totalAssetCount,
+    conditionOptions,
+    operationalOptions,
+    labelMaps,
+  ] = await Promise.all([
     prisma.asset.findMany({
       where,
-      include: { category: true, location: true },
+      include: {
+        category: true,
+        location: true,
+        project: true,
+        _count: { select: { units: { where: { ...notDeleted } } } },
+      },
       orderBy: { updatedAt: "desc" },
     }),
-    prisma.assetCategory.findMany({ orderBy: { name: "asc" } }),
-    prisma.location.findMany({ orderBy: { name: "asc" } }),
+    prisma.assetCategory.findMany({ where: { ...notDeleted }, orderBy: { name: "asc" } }),
+    prisma.location.findMany({ where: { ...notDeleted }, orderBy: { name: "asc" } }),
+    prisma.project.findMany({
+      where: { ...notDeleted },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+    prisma.asset.count({ where: { ...notDeleted } }),
+    listActiveLookupsByDomain(prisma, "ASSET_CONDITION"),
+    listActiveLookupsByDomain(prisma, "ASSET_OPERATIONAL_STATUS"),
+    loadLookupLabelMaps(prisma),
   ]);
 
-  const rows = assets.map(toAssetListItem);
+  const rows = await Promise.all(assets.map((a) => toAssetListItem(a)));
+  const emptyCatalog = rows.length === 0 && totalAssetCount === 0;
+  const noRows = rows.length === 0;
+  const conditionLabels = Object.fromEntries(labelMaps.conditionLabelByCode);
+  const operationalLabels = Object.fromEntries(
+    labelMaps.operationalStatusLabelByCode,
+  );
 
   return (
     <div className="space-y-6">
@@ -66,21 +107,21 @@ export default async function InventoryPage({ searchParams }: { searchParams: Se
 
       <form
         method="get"
-        className="grid gap-3 rounded-lg border border-border bg-card p-4 md:grid-cols-2 lg:grid-cols-6"
+        className="grid gap-3 rounded-lg border border-border bg-card p-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8"
       >
-        <input
+        <Input
           name="q"
           placeholder="Search name, SKU, or track tag…"
           defaultValue={q}
-          className="rounded-md border border-input bg-background px-3 py-2 text-sm lg:col-span-2"
+          className="bg-background md:col-span-2 xl:col-span-2"
         />
         <select
           name="categoryId"
           defaultValue={sp.categoryId ?? ""}
-          className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+          className={NATIVE_SELECT_CLASSES}
         >
           <option value="">All categories</option>
-          {categories.map((c) => (
+          {categories.map((c: AssetCategory) => (
             <option key={c.id} value={c.id}>
               {c.name}
             </option>
@@ -89,93 +130,70 @@ export default async function InventoryPage({ searchParams }: { searchParams: Se
         <select
           name="locationId"
           defaultValue={sp.locationId ?? ""}
-          className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+          className={NATIVE_SELECT_CLASSES}
         >
           <option value="">All locations</option>
-          {locations.map((l) => (
+          {locations.map((l: Location) => (
             <option key={l.id} value={l.id}>
               {l.name}
             </option>
           ))}
         </select>
         <select
+          name="projectId"
+          defaultValue={sp.projectId ?? ""}
+          className={NATIVE_SELECT_CLASSES}
+        >
+          <option value="">All projects</option>
+          {projects.map((p: Pick<Project, "id" | "name">) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+        <select
           name="condition"
           defaultValue={sp.condition ?? ""}
-          className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+          className={NATIVE_SELECT_CLASSES}
         >
           <option value="">Any condition</option>
-          {(["WORKING", "BROKEN", "IN_REPAIR", "UNKNOWN"] as const).map((c) => (
-            <option key={c} value={c}>
-              {c}
+          {conditionOptions.map((c: { code: string; label: string }) => (
+            <option key={c.code} value={c.code}>
+              {c.label}
             </option>
           ))}
         </select>
         <select
           name="status"
           defaultValue={sp.status ?? ""}
-          className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+          className={NATIVE_SELECT_CLASSES}
         >
           <option value="">Any status</option>
-          {(["AVAILABLE", "MAINTENANCE", "RETIRED"] as const).map((s) => (
-            <option key={s} value={s}>
-              {s}
+          {operationalOptions.map((s: { code: string; label: string }) => (
+            <option key={s.code} value={s.code}>
+              {s.label}
             </option>
           ))}
         </select>
-        <div className="flex gap-2 md:col-span-2 lg:col-span-6">
-          <Button type="submit" variant="secondary">
+        <div className="flex flex-col gap-2 sm:flex-row md:col-span-2 xl:col-span-8">
+          <Button type="submit" variant="secondary" className="min-h-11 w-full sm:min-h-9 sm:w-auto">
             Apply filters
           </Button>
-          <Button type="button" variant="ghost" asChild>
+          <Button type="button" variant="ghost" asChild className="min-h-11 w-full sm:min-h-9 sm:w-auto">
             <Link href="/inventory">Clear</Link>
           </Button>
         </div>
       </form>
 
-      {rows.length === 0 ? (
-        <p className="text-muted-foreground">No assets match your filters.</p>
+      {noRows ? (
+        <InventoryEmptyPanel variant={emptyCatalog ? "catalog" : "filtered"} canEdit={canEdit} />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-border bg-muted/50">
-              <tr>
-                <th className="p-3 font-medium">SKU / ID</th>
-                <th className="p-3 font-medium">Name</th>
-                <th className="p-3 font-medium">Category</th>
-                <th className="p-3 font-medium">Location</th>
-                <th className="p-3 font-medium">Qty</th>
-                <th className="p-3 font-medium">Condition</th>
-                <th className="p-3 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((a) => (
-                <tr key={a.id} className="border-b border-border last:border-0 hover:bg-muted/30">
-                  <td className="p-3">
-                    <Link
-                      href={`/inventory/${a.id}`}
-                      className="font-mono text-primary underline-offset-4 hover:underline"
-                    >
-                      {a.skuOrInternalId}
-                    </Link>
-                  </td>
-                  <td className="p-3">{a.name}</td>
-                  <td className="p-3 text-muted-foreground">{a.categoryName ?? "—"}</td>
-                  <td className="p-3 text-muted-foreground">{a.locationName ?? "—"}</td>
-                  <td className="p-3">
-                    {a.quantityAvailable}/{a.quantityTotal}
-                  </td>
-                  <td className="p-3">
-                    <ConditionBadge value={a.condition} />
-                  </td>
-                  <td className="p-3">
-                    <OperationalBadge value={a.operationalStatus} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <InventoryAssetTable
+          rows={rows}
+          conditionLabels={conditionLabels}
+          operationalLabels={operationalLabels}
+          canUseCart={canUseCart}
+        />
       )}
     </div>
   );

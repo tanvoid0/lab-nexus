@@ -40,8 +40,12 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# env files — never commit secrets (template is committed as `.env.example`)
+.env
+.env.*
+!.env.example
+# Written on first local `pnpm db:seed` when SEED_DEMO_PASSWORD is unset (random demo password)
+prisma/.seed-demo-credentials.json
 
 # vercel
 .vercel

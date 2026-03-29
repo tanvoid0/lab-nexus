@@ -1,6 +1,9 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { Toaster } from "sonner";
+import Script from "next/script";
+import { AppProviders } from "@/components/providers/app-providers";
+import { ResponsiveToaster } from "@/components/providers/responsive-toaster";
+import { NEXT_THEMES_INIT_SCRIPT } from "@/lib/settings/theme-init";
 import "@/lib/fontawesome";
 import "@fortawesome/fontawesome-svg-core/styles.css";
 import "./globals.css";
@@ -20,6 +23,12 @@ export const metadata: Metadata = {
   description: "Laboratory inventory and equipment checkout",
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -35,8 +44,15 @@ export default function RootLayout({
         className="min-h-full flex flex-col bg-background text-foreground"
         suppressHydrationWarning
       >
-        {children}
-        <Toaster richColors position="top-center" />
+        <Script
+          id="next-themes-init"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: NEXT_THEMES_INIT_SCRIPT }}
+        />
+        <AppProviders>
+          {children}
+          <ResponsiveToaster />
+        </AppProviders>
       </body>
     </html>
   );

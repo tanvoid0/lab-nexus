@@ -1,7 +1,13 @@
 import Link from "next/link";
 import { auth } from "@/auth";
-import { hasAnyRole } from "@/lib/auth/roles";
+import {
+  hasAnyRole,
+  hasRole,
+  LAB_ROLE,
+  LAB_ROLES_STAFF,
+} from "@/lib/auth/roles";
 import { prisma } from "@/lib/db";
+import { notDeleted } from "@/lib/prisma/active-scopes";
 import { redirect } from "next/navigation";
 import {
   Card,
@@ -10,15 +16,23 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { createCategoryAction, createLocationAction } from "@/lib/actions/admin";
+import {
+  AuditActivityEntries,
+  AuditSectionTitle,
+} from "@/components/admin/audit-activity-entries";
 import { AdminToolbarActions } from "@/components/admin/admin-toolbar-actions";
-import { AdminMiniForm } from "./admin-mini-form";
+import { Button } from "@/components/ui/button";
+import { assetCountByConditionCode } from "@/lib/admin/asset-condition-counts";
+import { loadLookupLabelMaps } from "@/lib/reference/lookup-label-maps";
+import { checkoutBorrowerLabel } from "@/lib/checkout/borrower-display";
 
 export default async function AdminPage() {
   const session = await auth();
-  if (!hasAnyRole(session!.user!.roles ?? [], ["ADMIN", "RESEARCHER"])) {
+  if (!hasAnyRole(session!.user!.roles ?? [], LAB_ROLES_STAFF)) {
     redirect("/inventory");
   }
+
+  const isAdmin = hasRole(session!.user!.roles ?? [], LAB_ROLE.ADMIN);
 
   const [
     assetCount,
@@ -28,15 +42,15 @@ export default async function AdminPage() {
     byCondition,
     recentAudits,
     overdueList,
+    labelMaps,
   ] = await Promise.all([
-    prisma.asset.count(),
-    prisma.asset.count({ where: { operationalStatus: "AVAILABLE" } }),
+    prisma.asset.count({ where: { ...notDeleted } }),
+    prisma.asset.count({
+      where: { operationalStatusCode: "AVAILABLE", ...notDeleted },
+    }),
     prisma.checkout.count({ where: { status: "ACTIVE" } }),
     prisma.checkout.count({ where: { status: "OVERDUE" } }),
-    prisma.asset.groupBy({
-      by: ["condition"],
-      _count: { id: true },
-    }),
+    assetCountByConditionCode(),
     prisma.auditLog.findMany({
       orderBy: { createdAt: "desc" },
       take: 15,
@@ -46,11 +60,12 @@ export default async function AdminPage() {
       where: { status: "OVERDUE" },
       include: {
         asset: { select: { id: true, name: true, skuOrInternalId: true } },
-        user: { select: { name: true, email: true } },
+        user: { select: { name: true, email: true, deletedAt: true } },
       },
       orderBy: { dueAt: "asc" },
       take: 20,
     }),
+    loadLookupLabelMaps(prisma),
   ]);
 
   return (
@@ -59,10 +74,10 @@ export default async function AdminPage() {
         <div>
           <h1 className="text-2xl font-semibold text-primary">Admin</h1>
           <p className="text-sm text-muted-foreground">
-            KPIs, overdue items, and reference data.
+            KPIs, overdue items, and quick links.
           </p>
         </div>
-        <AdminToolbarActions />
+        <AdminToolbarActions showReferenceData={isAdmin} />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -96,34 +111,68 @@ export default async function AdminPage() {
         <Card className="border-border">
           <CardHeader>
             <CardTitle className="text-primary">By condition</CardTitle>
+            <CardDescription>Counts by condition code (labels in Reference data).</CardDescription>
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
             {byCondition.map((b) => (
-              <p key={b.condition}>
-                {b.condition}: {b._count.id}
+              <p key={b.conditionCode}>
+                {labelMaps.conditionLabelByCode.get(b.conditionCode) ?? b.conditionCode}:{" "}
+                {b._count.id}
               </p>
             ))}
           </CardContent>
         </Card>
 
-        <div className="space-y-4">
+        {isAdmin ? (
+          <>
+            <Card className="border-border">
+              <CardHeader>
+                <CardTitle className="text-primary">Reference data</CardTitle>
+                <CardDescription>
+                  Categories, locations, condition and operational status lookups.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Manage taxonomy used across inventory, imports, and filters.
+                </p>
+                <Button asChild>
+                  <Link href="/admin/reference-data">Open reference data</Link>
+                </Button>
+              </CardContent>
+            </Card>
+            <Card className="border-border">
+              <CardHeader>
+                <CardTitle className="text-primary">Currencies</CardTitle>
+                <CardDescription>
+                  Functional (reporting) currency and allowed vendor transaction currencies
+                  (Settings subsection).
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Aligns with typical ERP inventory: one base currency plus explicit foreign
+                  currencies for invoices and POs.
+                </p>
+                <Button asChild>
+                  <Link href="/settings/currencies">Open lab currencies</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          </>
+        ) : (
           <Card className="border-border">
             <CardHeader>
-              <CardTitle className="text-primary">New category</CardTitle>
+              <CardTitle className="text-primary">Reference data</CardTitle>
             </CardHeader>
             <CardContent>
-              <AdminMiniForm action={createCategoryAction} fieldName="name" label="Name" />
+              <p className="text-sm text-muted-foreground">
+                Only lab admins can edit categories, locations, and lookup labels. Ask an admin
+                if you need new values.
+              </p>
             </CardContent>
           </Card>
-          <Card className="border-border">
-            <CardHeader>
-              <CardTitle className="text-primary">New location</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <AdminMiniForm action={createLocationAction} fieldName="name" label="Name" />
-            </CardContent>
-          </Card>
-        </div>
+        )}
       </div>
 
       <Card className="border-border">
@@ -149,7 +198,7 @@ export default async function AdminPage() {
                     >
                       {c.asset.name}
                     </Link>
-                    <p className="text-muted-foreground">{c.user.name || c.user.email}</p>
+                    <p className="text-muted-foreground">{checkoutBorrowerLabel(c.user)}</p>
                   </div>
                   <p className="text-destructive">Due {c.dueAt.toLocaleString()}</p>
                 </li>
@@ -160,25 +209,23 @@ export default async function AdminPage() {
       </Card>
 
       <Card className="border-border">
-        <CardHeader>
-          <CardTitle className="text-primary">Recent audit activity</CardTitle>
+        <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <AuditSectionTitle variant="recent">Recent audit activity</AuditSectionTitle>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/admin/audit">Full audit trail</Link>
+          </Button>
         </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          {recentAudits.map((a) => (
-            <div key={a.id} className="border-b border-border pb-2 last:border-0">
-              <span className="font-medium">{a.action}</span>{" "}
-              <span className="text-muted-foreground">{a.entityType}</span>{" "}
-              <span className="text-muted-foreground">
-                {a.createdAt.toLocaleString()}
-              </span>
-              {a.user ? (
-                <span className="text-muted-foreground">
-                  {" "}
-                  — {a.user.name || a.user.email}
-                </span>
-              ) : null}
-            </div>
-          ))}
+        <CardContent>
+          <AuditActivityEntries
+            entries={recentAudits.map((a) => ({
+              id: a.id,
+              entityType: a.entityType,
+              action: a.action,
+              createdAtIso: a.createdAt.toISOString(),
+              user: a.user,
+            }))}
+            emptyMessage="No audit events recorded yet."
+          />
         </CardContent>
       </Card>
     </div>

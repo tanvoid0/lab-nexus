@@ -26,3 +26,16 @@ export function zodErrorToFieldErrors(err: ZodError): Record<string, string[]> {
   }
   return out;
 }
+
+/**
+ * When the action failed and there is a form error or field errors map, returns the first
+ * message (with optional fallback). Matches typical server-action form UX guards.
+ */
+export function actionFailureMessage(
+  state: ActionResult,
+  fallback = "Could not save.",
+): string | undefined {
+  if (state.ok) return undefined;
+  if (!state.formError && !state.fieldErrors) return undefined;
+  return state.formError || Object.values(state.fieldErrors ?? {}).flat()[0] || fallback;
+}

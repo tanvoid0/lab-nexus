@@ -1,8 +1,15 @@
 import Link from "next/link";
-import type { CheckoutStatus } from "@prisma/client";
 import { auth } from "@/auth";
-import { hasAnyRole } from "@/lib/auth/roles";
+import {
+  CHECKOUT_STATUS_ORDER,
+  getCheckoutBucketsForLastDays,
+  getCheckoutStatusCounts,
+  getCheckoutStatusDistribution,
+} from "@/lib/analytics/checkout-activity";
+import { hasAnyRole, LAB_ROLES_STAFF } from "@/lib/auth/roles";
 import { prisma } from "@/lib/db";
+import { notDeleted } from "@/lib/prisma/active-scopes";
+import { accountDisplayLabel } from "@/lib/checkout/borrower-display";
 import { redirect } from "next/navigation";
 import {
   Card,
@@ -12,26 +19,25 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-
-const DAY_MS = 86_400_000;
+import { AssetsByCategoryPie } from "@/components/admin/analytics/assets-by-category-pie";
+import { CheckoutStatusPie } from "@/components/admin/analytics/checkout-status-pie";
+import { CheckoutsDailyBarChart } from "@/components/admin/analytics/checkouts-daily-bar-chart";
+import { TopBorrowersBarChart } from "@/components/admin/analytics/top-borrowers-bar-chart";
 
 export default async function AdminAnalyticsPage() {
   const session = await auth();
-  if (!hasAnyRole(session!.user!.roles ?? [], ["ADMIN", "RESEARCHER"])) {
+  if (!hasAnyRole(session!.user!.roles ?? [], LAB_ROLES_STAFF)) {
     redirect("/inventory");
   }
 
-  const now = new Date();
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * DAY_MS);
-
-  const [checkoutsInRange, byCategory, topBorrowers, returnStats] =
+  const [dailyChartData, statusPieData, statusCounts, byCategory, topBorrowers] =
     await Promise.all([
-      prisma.checkout.findMany({
-        where: { checkedOutAt: { gte: thirtyDaysAgo } },
-        select: { checkedOutAt: true },
-      }),
+      getCheckoutBucketsForLastDays(30),
+      getCheckoutStatusDistribution(),
+      getCheckoutStatusCounts(),
       prisma.asset.groupBy({
         by: ["categoryId"],
+        where: { ...notDeleted },
         _count: { id: true },
       }),
       prisma.checkout.groupBy({
@@ -40,30 +46,15 @@ export default async function AdminAnalyticsPage() {
         orderBy: { _count: { userId: "desc" } },
         take: 10,
       }),
-      prisma.checkout.groupBy({
-        by: ["status"],
-        _count: { id: true },
-      }),
     ]);
+
+  const checkoutsInRangeTotal = dailyChartData.reduce((s, d) => s + d.count, 0);
 
   const categories = await prisma.assetCategory.findMany({
     select: { id: true, name: true },
+    orderBy: { name: "asc" },
   });
   const catName = new Map(categories.map((c) => [c.id, c.name]));
-
-  const dayKeys: string[] = [];
-  for (let i = 29; i >= 0; i--) {
-    const d = new Date(now.getTime() - i * DAY_MS);
-    dayKeys.push(d.toISOString().slice(0, 10));
-  }
-  const perDay: Record<string, number> = Object.fromEntries(
-    dayKeys.map((k) => [k, 0]),
-  );
-  for (const c of checkoutsInRange) {
-    const k = c.checkedOutAt.toISOString().slice(0, 10);
-    if (k in perDay) perDay[k] += 1;
-  }
-  const maxDay = Math.max(1, ...Object.values(perDay));
 
   const categoryRows = byCategory
     .map((b) => ({
@@ -71,21 +62,18 @@ export default async function AdminAnalyticsPage() {
       count: b._count.id,
     }))
     .sort((a, b) => b.count - a.count);
-  const maxCat = Math.max(1, ...categoryRows.map((r) => r.count));
-
   const userIds = topBorrowers.map((t) => t.userId);
   const users = await prisma.user.findMany({
     where: { id: { in: userIds } },
-    select: { id: true, email: true, name: true },
+    select: { id: true, email: true, name: true, deletedAt: true },
   });
   const userMap = new Map(users.map((u) => [u.id, u]));
-  const maxBorrow = Math.max(1, ...topBorrowers.map((t) => t._count.id));
 
-  const statusOrder: CheckoutStatus[] = ["ACTIVE", "RETURNED", "OVERDUE"];
-  const statusCounts: Partial<Record<CheckoutStatus, number>> = {};
-  for (const s of returnStats) {
-    statusCounts[s.status] = s._count.id;
-  }
+  const borrowerChartData = topBorrowers.map((t) => {
+    const u = userMap.get(t.userId);
+    const label = u ? accountDisplayLabel(u) : t.userId.slice(-6);
+    return { label, count: t._count.id };
+  });
 
   return (
     <div className="space-y-8">
@@ -101,18 +89,18 @@ export default async function AdminAnalyticsPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        {statusOrder.map((status) => (
-          <Card key={status} className="border-border">
-            <CardHeader className="pb-2">
-              <CardDescription>Checkouts — {status}</CardDescription>
-              <CardTitle className="text-2xl text-primary">
-                {statusCounts[status] ?? 0}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-        ))}
-      </div>
+      <Card className="border-border">
+        <CardHeader>
+          <CardTitle className="text-primary">Checkouts by status</CardTitle>
+          <CardDescription>Share of checkout records by workflow state.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-center text-xs text-muted-foreground">
+            {CHECKOUT_STATUS_ORDER.map((s) => `${s}: ${statusCounts[s]}`).join(" · ")}
+          </p>
+          <CheckoutStatusPie data={statusPieData} />
+        </CardContent>
+      </Card>
 
       <Card className="border-border">
         <CardHeader>
@@ -120,35 +108,9 @@ export default async function AdminAnalyticsPage() {
           <CardDescription>By calendar day, UTC date bucket.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div
-            className="flex h-40 items-end gap-0.5 sm:gap-1"
-            role="img"
-            aria-label="Bar chart of checkouts per day"
-          >
-            {dayKeys.map((day) => {
-              const n = perDay[day] ?? 0;
-              const pct = (n / maxDay) * 100;
-              return (
-                <div
-                  key={day}
-                  className="flex min-w-0 flex-1 flex-col items-center gap-1"
-                  title={`${day}: ${n}`}
-                >
-                  <div className="flex w-full flex-1 items-end justify-center">
-                    <div
-                      className="w-full max-w-[14px] rounded-t bg-primary/80 sm:max-w-[20px]"
-                      style={{ height: `${Math.max(pct, n > 0 ? 8 : 0)}%` }}
-                    />
-                  </div>
-                  <span className="hidden text-[9px] text-muted-foreground sm:block">
-                    {day.slice(8)}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+          <CheckoutsDailyBarChart data={dailyChartData} />
           <p className="mt-2 text-xs text-muted-foreground">
-            Total in range: {checkoutsInRange.length}
+            Total in range: {checkoutsInRangeTotal}
           </p>
         </CardContent>
       </Card>
@@ -158,25 +120,10 @@ export default async function AdminAnalyticsPage() {
           <CardHeader>
             <CardTitle className="text-primary">Assets by category</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {categoryRows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No assets.</p>
-            ) : (
-              categoryRows.map((row) => (
-                <div key={row.name}>
-                  <div className="mb-1 flex justify-between text-sm">
-                    <span>{row.name}</span>
-                    <span className="text-muted-foreground">{row.count}</span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-primary/70"
-                      style={{ width: `${(row.count / maxCat) * 100}%` }}
-                    />
-                  </div>
-                </div>
-              ))
-            )}
+          <CardContent>
+            <AssetsByCategoryPie
+              data={categoryRows.map((row) => ({ name: row.name, count: row.count }))}
+            />
           </CardContent>
         </Card>
 
@@ -185,32 +132,8 @@ export default async function AdminAnalyticsPage() {
             <CardTitle className="text-primary">Top borrowers (all time)</CardTitle>
             <CardDescription>By number of checkout records.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {topBorrowers.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No checkouts yet.</p>
-            ) : (
-              topBorrowers.map((t) => {
-                const u = userMap.get(t.userId);
-                const label = u?.name || u?.email || t.userId.slice(-6);
-                const n = t._count.id;
-                return (
-                  <div key={t.userId}>
-                    <div className="mb-1 flex justify-between text-sm">
-                      <span className="truncate pr-2" title={u?.email}>
-                        {label}
-                      </span>
-                      <span className="shrink-0 text-muted-foreground">{n}</span>
-                    </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-accent"
-                        style={{ width: `${(n / maxBorrow) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })
-            )}
+          <CardContent>
+            <TopBorrowersBarChart data={borrowerChartData} />
           </CardContent>
         </Card>
       </div>

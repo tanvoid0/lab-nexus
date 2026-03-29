@@ -1,7 +1,7 @@
 "use server";
 
 import { auth } from "@/auth";
-import { hasAnyRole } from "@/lib/auth/roles";
+import { hasAnyRole, LAB_ROLES_STAFF } from "@/lib/auth/roles";
 import { markOverdueCheckouts } from "@/lib/actions/overdue";
 import { revalidatePath } from "next/cache";
 
@@ -18,11 +18,11 @@ export async function refreshOverdueStatusAction(): Promise<RefreshOverdueResult
   if (!session?.user?.id) {
     return { ok: false, error: "Sign in required." };
   }
-  if (!hasAnyRole(session.user.roles ?? [], ["ADMIN", "RESEARCHER"])) {
+  if (!hasAnyRole(session.user.roles ?? [], LAB_ROLES_STAFF)) {
     return { ok: false, error: "You cannot refresh overdue status." };
   }
 
-  const updated = await markOverdueCheckouts();
+  const updated = await markOverdueCheckouts({ actorUserId: session.user.id });
 
   revalidatePath("/admin");
   revalidatePath("/checkouts");

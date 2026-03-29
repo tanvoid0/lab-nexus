@@ -1,0 +1,26 @@
+---
+description: Prefer clear folders, small modules, and reusable atoms over large monolithic files
+alwaysApply: true
+---
+
+# Code organization and modularity
+
+Structure new and refactored code so it stays **easy to find, reuse, and change**.
+
+## Files and folders
+
+- **Group by domain or feature** under predictable roots: e.g. `components/admin/reference-data/`, `lib/audit/`, `lib/currency/`, `components/form/`. Avoid dumping unrelated concerns into one long file.
+- **Split large client components** when they mix several screens or forms (filters vs table, row vs create form, layout shell vs header pieces). Keep a **thin barrel** (`index.ts` or a small re-export file) when it simplifies imports without hiding the real modules.
+- **Prefer colocation** of helpers next to their feature when they are not generic; move to **`lib/`** when the logic is **pure**, shared across routes, or worth unit testing (e.g. `lib/audit/entity-href.ts`, `lib/reference/merge-lookup-options.ts`).
+
+## Functions and components
+
+- **Atomic units**: one clear responsibility per function/component. Extract repeated JSX or action-state patterns into small components or shared helpers (e.g. `components/form/field-error.tsx`, `actionFailureMessage()` in `lib/form/action-result.ts`).
+- **Reuse before duplicating**: if the same pattern appears twice (validation messages, query builders, label maps), consolidate thoughtfully instead of copy-pasting.
+- **Use judgment**: do not fragment a single straightforward form into dozens of one-line files; split when size or mixed concerns hurt readability or reuse.
+
+## Stack-specific notes
+
+- **Server vs client**: keep `"use client"` boundaries minimal—push pure logic to server-safe modules in `lib/` and keep client files focused on interaction and presentation.
+
+When a change grows a file substantially, consider **splitting in the same PR** and updating `plan.md` if the work is roadmap-sized (see `plan-md-maintenance.mdc`).

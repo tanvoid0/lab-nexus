@@ -36,7 +36,9 @@ export function CreateProjectForm() {
           New project
         </CardTitle>
         <CardDescription>
-          Projects group checkouts. Slug is optional (generated from the name).
+          Projects group checkouts and can own a profile (description, links).
+          Assign assets to a project from each inventory item. Slug is optional
+          (generated from the name).
         </CardDescription>
       </CardHeader>
       <CardContent>

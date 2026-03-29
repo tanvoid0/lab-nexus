@@ -1,5 +1,5 @@
 import { auth } from "@/auth";
-import { hasAnyRole } from "@/lib/auth/roles";
+import { hasAnyRole, LAB_ROLES_STAFF } from "@/lib/auth/roles";
 import { escapeCsvCell } from "@/lib/csv";
 import { prisma } from "@/lib/db";
 import { NextResponse } from "next/server";
@@ -7,7 +7,7 @@ import { NextResponse } from "next/server";
 /** CSV export of all checkout records (ADMIN / RESEARCHER). */
 export async function GET() {
   const session = await auth();
-  if (!session?.user?.id || !hasAnyRole(session.user.roles, ["ADMIN", "RESEARCHER"])) {
+  if (!session?.user?.id || !hasAnyRole(session.user.roles, LAB_ROLES_STAFF)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -46,11 +46,11 @@ export async function GET() {
       c.checkedOutAt.toISOString(),
       c.dueAt.toISOString(),
       c.returnedAt?.toISOString() ?? "",
-      escapeCsvCell(c.purpose),
+      escapeCsvCell(c.purpose ?? ""),
       escapeCsvCell(c.asset.skuOrInternalId),
       escapeCsvCell(c.asset.name),
-      escapeCsvCell(c.user.email),
-      escapeCsvCell(c.user.name ?? ""),
+      escapeCsvCell(c.user?.email ?? ""),
+      escapeCsvCell(c.user?.name ?? ""),
       escapeCsvCell(c.project?.name ?? ""),
       escapeCsvCell(c.assetUnit?.serialNumber ?? ""),
       escapeCsvCell(c.assetUnit?.trackTag ?? ""),

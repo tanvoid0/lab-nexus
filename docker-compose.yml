@@ -1,7 +1,20 @@
-# Prisma + MongoDB expect a replica set. After `docker compose up -d`, run once:
+# Lab Nexus — MongoDB replica set + optional full stack (Next.js in Docker).
+#
+# Mongo only (app on host with pnpm dev): start just Mongo, then rs.initiate for localhost:
+#   docker compose up -d mongo
 #   docker exec -it lab-nexus-mongo mongosh --eval "rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'localhost:27017' }] })"
-# Then set DATABASE_URL to:
-#   mongodb://127.0.0.1:27017/lab-nexus?replicaSet=rs0
+#   # DATABASE_URL in .env → mongodb://127.0.0.1:27017/lab-nexus?replicaSet=rs0
+#
+# Full stack (credentials from .env; DATABASE_URL is overridden inside the app container only):
+#   cp .env.example .env   # set AUTH_SECRET, CRON_SECRET, etc.
+#   docker compose --profile full up -d --build
+#   docker compose exec app npx prisma db push
+#   docker compose exec app npx tsx prisma/seed.ts
+#   open http://localhost:3000
+#
+# If you switch between "mongo-only" and "full stack" on the same volume, reset Mongo data if replica set errors appear:
+#   docker compose down -v
+
 services:
   mongo:
     image: mongo:7
@@ -9,3 +22,55 @@ services:
     ports:
       - "27017:27017"
     command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    volumes:
+      - lab-nexus-mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+
+  mongo-init:
+    profiles: [full]
+    image: mongo:7
+    restart: "no"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    command:
+      - mongosh
+      - mongodb://mongo:27017/admin
+      - --quiet
+      - --eval
+      - "try { rs.status() } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'mongo:27017' }] }); }"
+
+  app:
+    profiles: [full]
+    build: .
+    container_name: lab-nexus-app
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      # Override host-oriented DATABASE_URL so the container reaches the mongo service.
+      DATABASE_URL: mongodb://mongo:27017/lab-nexus?replicaSet=rs0&directConnection=true
+    depends_on:
+      mongo-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+volumes:
+  lab-nexus-mongo-data:

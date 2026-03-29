@@ -1,0 +1,28 @@
+---
+description: Keep plan.md WIP and delivered sections current while implementing roadmap work
+alwaysApply: true
+---
+
+# Engineering plan (`plan.md`)
+
+The repository root file **`plan.md`** is the **single source of truth** for what shipped (**§1**), what is active (**§2 WIP**), and backlog (**§3**). When you do substantive product or roadmap-related work in this codebase, **update `plan.md` in the same change series** (same PR or same agent session), not only at the end of a long branch.
+
+## While work is in progress
+
+- **If the work maps to an item in §3 (future/backlog):** add a row to **§2 Work in progress** (replace the placeholder row if it is still the default). In §3, remove that bullet, shorten it to “see §2”, or add a one-line pointer so the backlog does not duplicate active work.
+- **If the work is new and not listed in §3:** add a **§2** row anyway (short description + notes). Optionally add a matching §3 bullet later if it becomes recurring backlog.
+- **If §2 already lists this effort:** refresh the row (notes, scope, branch) as the implementation evolves.
+
+Keep **§2** small: prefer **one row per active effort**.
+
+## When work completes
+
+- Add or extend **§1 Delivered** (table row or bullet, matching the style of nearby rows).
+- **Remove** the corresponding **§2** row (restore the placeholder line only if nothing else is WIP).
+- Set **`Last updated`** at the top of `plan.md` to the current date.
+
+## Scope judgment
+
+Apply this to features, notable refactors, and backlog-sized tasks. Skip for trivial fixes (typos, one-line bugs) with no plan impact.
+
+See **§5 How to maintain this doc** in `plan.md` for the human-editable checklist.

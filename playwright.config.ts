@@ -1,8 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * Local: start `pnpm dev`, then `pnpm test:e2e`.
- * Or rely on `reuseExistingServer` to attach to an already running dev server.
+ * Local: start `pnpm dev` + Mongo (+ seed), then `pnpm test:e2e` (install browsers once:
+ * `pnpm exec playwright install chromium`). With `CI=true`, `webServer` always starts `pnpm dev`
+ * instead of reusing an existing server.
  */
 export default defineConfig({
   testDir: "e2e",

@@ -48,5 +48,5 @@ export async function loginAction(
     throw e;
   }
 
-  redirect("/inventory");
+  redirect("/");
 }

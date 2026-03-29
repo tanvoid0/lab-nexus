@@ -1,19 +1,24 @@
 import Image from "next/image";
 import Link from "next/link";
+import { AuditEntityType } from "@prisma/client";
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
-import { hasAnyRole, hasRole } from "@/lib/auth/roles";
+import {
+  hasAnyRole,
+  hasRole,
+  LAB_ROLE,
+  LAB_ROLES,
+  LAB_ROLES_STAFF,
+} from "@/lib/auth/roles";
 import { prisma } from "@/lib/db";
+import { notDeleted } from "@/lib/prisma/active-scopes";
 import { DeleteAssetButton } from "@/components/inventory/delete-asset-button";
 import { Button } from "@/components/ui/button";
 import { ConditionBadge, OperationalBadge } from "@/components/inventory/asset-status-badge";
 import { CheckoutPanel } from "@/components/checkout/checkout-panel";
 import { ReturnCheckoutForm } from "@/components/checkout/return-checkout-form";
 import { AssetUnitsSection } from "@/components/inventory/asset-units-section";
-import {
-  checkoutUnitOptions,
-  type AssetUnitRow,
-} from "@/lib/inventory/asset-unit";
+import { checkoutUnitOptions, type AssetUnitRow } from "@/lib/inventory/asset-unit";
 import {
   Card,
   CardContent,
@@ -21,25 +26,50 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { loadLookupLabelMaps } from "@/lib/reference/lookup-label-maps";
+import {
+  AuditActivityEntries,
+  AuditSectionTitle,
+} from "@/components/admin/audit-activity-entries";
+import { BreadcrumbDetailFromTitle } from "@/components/layout/breadcrumb-detail-from-title";
+import { ScanQrPanel } from "@/components/inventory/scan-qr-panel";
+import {
+  buildScanQrChoices,
+  initialScanQrChoiceIndex,
+} from "@/lib/inventory/scan-qr-choices";
+import { AddToCartAssetPanel } from "@/components/cart/add-to-cart-asset-panel";
+import { checkoutBorrowerLabel } from "@/lib/checkout/borrower-display";
+import type { NextPageProps } from "@/lib/types/next-app";
 
 export default async function AssetDetailPage({
   params,
-}: {
-  params: Promise<{ id: string }>;
+  searchParams,
+}: NextPageProps<{ id: string }> & {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { id } = await params;
+  const sp = await searchParams;
+  const unitQueryRaw = sp.unit;
+  const unitQuery =
+    typeof unitQueryRaw === "string"
+      ? unitQueryRaw
+      : Array.isArray(unitQueryRaw)
+        ? unitQueryRaw[0]
+        : undefined;
   const session = await auth();
   const userId = session!.user!.id;
   const roles = session!.user!.roles ?? [];
 
-  const [asset, projects, audits] = await Promise.all([
-    prisma.asset.findUnique({
-      where: { id },
+  const [asset, projects, audits, labelMaps] = await Promise.all([
+    prisma.asset.findFirst({
+      where: { id, ...notDeleted },
       include: {
         category: true,
         location: true,
+        project: { select: { id: true, name: true } },
         custodian: { select: { name: true, email: true } },
         units: {
+          where: { ...notDeleted },
           orderBy: { createdAt: "asc" },
           include: {
             checkouts: {
@@ -51,7 +81,7 @@ export default async function AssetDetailPage({
         checkouts: {
           where: { status: { in: ["ACTIVE", "OVERDUE"] } },
           include: {
-            user: { select: { name: true, email: true } },
+            user: { select: { name: true, email: true, deletedAt: true } },
             assetUnit: {
               select: {
                 id: true,
@@ -64,19 +94,20 @@ export default async function AssetDetailPage({
         },
       },
     }),
-    prisma.project.findMany({ orderBy: { name: "asc" } }),
+    prisma.project.findMany({ where: { ...notDeleted }, orderBy: { name: "asc" } }),
     prisma.auditLog.findMany({
-      where: { entityType: "Asset", entityId: id },
+      where: { entityType: AuditEntityType.Asset, entityId: id },
       orderBy: { createdAt: "desc" },
       take: 20,
       include: { user: { select: { name: true, email: true } } },
     }),
+    loadLookupLabelMaps(prisma),
   ]);
 
   if (!asset) notFound();
 
-  const canEdit = hasAnyRole(roles, ["ADMIN", "RESEARCHER"]);
-  const isAdmin = hasRole(roles, "ADMIN");
+  const canEdit = hasAnyRole(roles, LAB_ROLES_STAFF);
+  const isAdmin = hasRole(roles, LAB_ROLE.ADMIN);
   const unitRows: AssetUnitRow[] = asset.units.map((u) => ({
     id: u.id,
     serialNumber: u.serialNumber,
@@ -87,14 +118,25 @@ export default async function AssetDetailPage({
   }));
   const unitCheckoutChoices = checkoutUnitOptions(unitRows);
   const requiresUnit = unitRows.length > 0;
+  const assetScanTag = asset.trackTag?.trim() || null;
+  const canUseCart = hasAnyRole(roles, LAB_ROLES);
   const canCheckout =
-    asset.operationalStatus === "AVAILABLE" &&
+    asset.operationalStatusCode === "AVAILABLE" &&
     asset.quantityAvailable > 0 &&
     (!requiresUnit || unitCheckoutChoices.length > 0) &&
-    hasAnyRole(roles, ["ADMIN", "RESEARCHER", "STUDENT"]);
+    canUseCart;
+  const canAddToCart =
+    canUseCart &&
+    asset.operationalStatusCode === "AVAILABLE" &&
+    asset.quantityAvailable > 0 &&
+    (!requiresUnit || unitCheckoutChoices.length > 0);
+
+  const scanQrChoices = buildScanQrChoices(assetScanTag, unitRows);
+  const scanQrPanelInitialIndex = initialScanQrChoiceIndex(scanQrChoices, unitQuery);
 
   return (
     <div className="space-y-8">
+      <BreadcrumbDetailFromTitle title={asset.name} />
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="font-mono text-sm text-muted-foreground">
@@ -102,8 +144,14 @@ export default async function AssetDetailPage({
           </p>
           <h1 className="text-2xl font-semibold text-primary">{asset.name}</h1>
           <div className="mt-2 flex flex-wrap gap-2">
-            <ConditionBadge value={asset.condition} />
-            <OperationalBadge value={asset.operationalStatus} />
+            <ConditionBadge
+              code={asset.conditionCode}
+              label={labelMaps.conditionLabelByCode.get(asset.conditionCode)}
+            />
+            <OperationalBadge
+              code={asset.operationalStatusCode}
+              label={labelMaps.operationalStatusLabelByCode.get(asset.operationalStatusCode)}
+            />
             <span className="text-sm text-muted-foreground">
               Available {asset.quantityAvailable} / {asset.quantityTotal}
             </span>
@@ -113,13 +161,6 @@ export default async function AssetDetailPage({
           {canEdit ? (
             <Button asChild variant="secondary">
               <Link href={`/inventory/${asset.id}/edit`}>Edit</Link>
-            </Button>
-          ) : null}
-          {asset.trackTag ? (
-            <Button asChild variant="outline">
-              <Link href={`/scan/${encodeURIComponent(asset.trackTag)}`}>
-                Open scan link
-              </Link>
             </Button>
           ) : null}
           {isAdmin ? <DeleteAssetButton assetId={asset.id} /> : null}
@@ -152,6 +193,19 @@ export default async function AssetDetailPage({
               <p>
                 <span className="text-muted-foreground">Location:</span>{" "}
                 {asset.location?.name ?? "—"}
+              </p>
+              <p>
+                <span className="text-muted-foreground">Project:</span>{" "}
+                {asset.project ? (
+                  <Link
+                    href={`/projects/${asset.project.id}`}
+                    className="text-primary underline-offset-4 hover:underline"
+                  >
+                    {asset.project.name}
+                  </Link>
+                ) : (
+                  "—"
+                )}
               </p>
               <p>
                 <span className="text-muted-foreground">Custodian:</span>{" "}
@@ -194,36 +248,52 @@ export default async function AssetDetailPage({
           />
 
           <Card className="border-border">
-            <CardHeader>
-              <CardTitle className="text-primary">Audit trail</CardTitle>
-              <CardDescription>Recent changes to this asset</CardDescription>
+            <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <AuditSectionTitle variant="trail">Audit trail</AuditSectionTitle>
+                <CardDescription>Recent changes to this asset</CardDescription>
+              </div>
+              {canEdit ? (
+                <Button asChild variant="outline" size="sm">
+                  <Link
+                    href={`/admin/audit?entity=Asset&entityId=${encodeURIComponent(asset.id)}`}
+                  >
+                    Open in admin audit
+                  </Link>
+                </Button>
+              ) : null}
             </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              {audits.length === 0 ? (
-                <p className="text-muted-foreground">No entries yet.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {audits.map((a) => (
-                    <li key={a.id} className="border-b border-border pb-2 last:border-0">
-                      <span className="font-medium">{a.action}</span>{" "}
-                      <span className="text-muted-foreground">
-                        {a.createdAt.toLocaleString()}
-                      </span>
-                      {a.user ? (
-                        <span className="text-muted-foreground">
-                          {" "}
-                          — {a.user.name || a.user.email}
-                        </span>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              )}
+            <CardContent>
+              <AuditActivityEntries
+                variant="compact"
+                entries={audits.map((a) => ({
+                  id: a.id,
+                  entityType: a.entityType,
+                  action: a.action,
+                  createdAtIso: a.createdAt.toISOString(),
+                  user: a.user,
+                }))}
+                emptyMessage="No entries yet."
+              />
             </CardContent>
           </Card>
         </div>
 
         <div className="space-y-6">
+          <ScanQrPanel
+            choices={scanQrChoices}
+            initialSelectedIndex={scanQrPanelInitialIndex}
+          />
+
+          {canAddToCart ? (
+            <AddToCartAssetPanel
+              assetId={asset.id}
+              name={asset.name}
+              skuOrInternalId={asset.skuOrInternalId}
+              unitChoices={unitCheckoutChoices}
+            />
+          ) : null}
+
           {canCheckout ? (
             <CheckoutPanel
               assetId={asset.id}
@@ -256,7 +326,7 @@ export default async function AssetDetailPage({
               ) : (
                 asset.checkouts.map((c) => {
                   const canReturn =
-                    c.userId === userId || hasRole(roles, "ADMIN");
+                    c.userId === userId || hasRole(roles, LAB_ROLE.ADMIN);
                   return (
                     <div
                       key={c.id}
@@ -270,10 +340,12 @@ export default async function AssetDetailPage({
                         )}
                       </p>
                       <p className="text-muted-foreground">
-                        {c.user.name || c.user.email}
+                        {checkoutBorrowerLabel(c.user)}
                       </p>
                       <p>Due {c.dueAt.toLocaleString()}</p>
-                      <p className="mt-1 text-muted-foreground">{c.purpose}</p>
+                      {c.purpose?.trim() ? (
+                        <p className="mt-1 text-muted-foreground">{c.purpose}</p>
+                      ) : null}
                       {c.assetUnit ? (
                         <p className="mt-1 text-xs text-muted-foreground">
                           Unit:{" "}

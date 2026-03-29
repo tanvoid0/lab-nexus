@@ -23,6 +23,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { nativeSelectClassName } from "@/lib/form/native-field-classes";
 
 const initial: ActionResult = { ok: true };
 
@@ -82,7 +83,7 @@ export function CheckoutPanel({
                 id="assetUnitId"
                 name="assetUnitId"
                 required
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                className={nativeSelectClassName()}
                 defaultValue=""
               >
                 <option value="" disabled>
@@ -108,9 +109,9 @@ export function CheckoutPanel({
                 icon={faAlignLeft}
                 className="size-3.5 text-muted-foreground"
               />
-              Purpose
+              Purpose <span className="font-normal text-muted-foreground">(optional)</span>
             </Label>
-            <Textarea id="purpose" name="purpose" required rows={2} />
+            <Textarea id="purpose" name="purpose" rows={2} />
             {fieldErr(state, "purpose")}
           </div>
           <div className="space-y-2">
@@ -141,7 +142,7 @@ export function CheckoutPanel({
             <select
               id="projectId"
               name="projectId"
-              className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+              className={nativeSelectClassName()}
             >
               <option value="">—</option>
               {projects.map((p) => (

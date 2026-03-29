@@ -1,7 +1,8 @@
 "use server";
 
 import { auth } from "@/auth";
-import { hasAnyRole } from "@/lib/auth/roles";
+import { hasAnyRole, LAB_ROLES_STAFF } from "@/lib/auth/roles";
+import { AuditAction, AuditEntityType } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
 import {
   failure,
@@ -10,6 +11,8 @@ import {
 } from "@/lib/form/action-result";
 import { assetUnitCreateSchema } from "@/lib/schemas/asset-unit";
 import { prisma } from "@/lib/db";
+import { notDeleted } from "@/lib/prisma/active-scopes";
+import { appendArchivedSuffix } from "@/lib/soft-delete/archive-keys";
 import { revalidatePath } from "next/cache";
 
 export async function createAssetUnitAction(
@@ -20,7 +23,7 @@ export async function createAssetUnitAction(
   if (!session?.user?.id) return failure({ formError: "Sign in required." });
 
   const roles = session.user.roles ?? [];
-  if (!hasAnyRole(roles, ["ADMIN", "RESEARCHER"])) {
+  if (!hasAnyRole(roles, LAB_ROLES_STAFF)) {
     return failure({ formError: "You cannot add units." });
   }
 
@@ -37,8 +40,8 @@ export async function createAssetUnitAction(
     return failure({ fieldErrors: zodErrorToFieldErrors(parsed.error) });
   }
 
-  const asset = await prisma.asset.findUnique({
-    where: { id: parsed.data.assetId },
+  const asset = await prisma.asset.findFirst({
+    where: { id: parsed.data.assetId, ...notDeleted },
   });
   if (!asset) return failure({ formError: "Asset not found." });
 
@@ -71,9 +74,9 @@ export async function createAssetUnitAction(
 
   await writeAuditLog({
     userId: session.user.id,
-    entityType: "Asset",
+    entityType: AuditEntityType.Asset,
     entityId: asset.id,
-    action: "UNIT_CREATE",
+    action: AuditAction.UNIT_CREATE,
     diff: { sku: asset.skuOrInternalId },
   });
 
@@ -90,7 +93,7 @@ export async function deleteAssetUnitAction(
   if (!session?.user?.id) return failure({ formError: "Sign in required." });
 
   const roles = session.user.roles ?? [];
-  if (!hasAnyRole(roles, ["ADMIN", "RESEARCHER"])) {
+  if (!hasAnyRole(roles, LAB_ROLES_STAFF)) {
     return failure({ formError: "You cannot remove units." });
   }
 
@@ -99,8 +102,8 @@ export async function deleteAssetUnitAction(
     return failure({ formError: "Missing unit." });
   }
 
-  const unit = await prisma.assetUnit.findUnique({
-    where: { id: unitId },
+  const unit = await prisma.assetUnit.findFirst({
+    where: { id: unitId, ...notDeleted },
     include: {
       checkouts: {
         where: { status: { in: ["ACTIVE", "OVERDUE"] } },
@@ -113,9 +116,18 @@ export async function deleteAssetUnitAction(
     return failure({ formError: "Cannot delete a unit that is checked out." });
   }
 
+  const now = new Date();
+  const newTag =
+    unit.trackTag != null && unit.trackTag !== ""
+      ? appendArchivedSuffix(unit.trackTag, unit.id, 200)
+      : null;
+
   try {
     await prisma.$transaction([
-      prisma.assetUnit.delete({ where: { id: unit.id } }),
+      prisma.assetUnit.update({
+        where: { id: unit.id },
+        data: { deletedAt: now, trackTag: newTag },
+      }),
       prisma.asset.update({
         where: { id: unit.assetId },
         data: {
@@ -132,9 +144,9 @@ export async function deleteAssetUnitAction(
 
   await writeAuditLog({
     userId: session.user.id,
-    entityType: "Asset",
+    entityType: AuditEntityType.Asset,
     entityId: unit.assetId,
-    action: "UNIT_DELETE",
+    action: AuditAction.UNIT_DELETE,
     diff: { unitId: unit.id },
   });
 

@@ -12,6 +12,7 @@ import {
   addProjectMemberAction,
   removeProjectMemberAction,
 } from "@/lib/actions/project";
+import { accountDisplayLabel } from "@/lib/checkout/borrower-display";
 import type { ActionResult } from "@/lib/form/action-result";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -29,7 +30,7 @@ const initial: ActionResult = { ok: true };
 
 export type ProjectMemberRow = {
   id: string;
-  user: { email: string; name: string | null };
+  user: { email: string; name: string | null; deletedAt: Date | null };
 };
 
 export function ProjectMembersPanel({
@@ -72,9 +73,7 @@ export function ProjectMembersPanel({
                 className="flex flex-col gap-2 rounded-md border border-border p-3 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div>
-                  <p className="font-medium">
-                    {m.user.name || m.user.email}
-                  </p>
+                  <p className="font-medium">{accountDisplayLabel(m.user)}</p>
                   <p className="text-muted-foreground">{m.user.email}</p>
                 </div>
                 {canManage ? (

@@ -1,5 +1,5 @@
 import { auth } from "@/auth";
-import { hasAnyRole } from "@/lib/auth/roles";
+import { hasAnyRole, LAB_ROLES_STAFF } from "@/lib/auth/roles";
 import { escapeCsvCell } from "@/lib/csv";
 import { prisma } from "@/lib/db";
 import { NextResponse } from "next/server";
@@ -7,12 +7,13 @@ import { NextResponse } from "next/server";
 /** CSV export of assets for planning (ADMIN / RESEARCHER). */
 export async function GET() {
   const session = await auth();
-  if (!session?.user?.id || !hasAnyRole(session.user.roles, ["ADMIN", "RESEARCHER"])) {
+  if (!session?.user?.id || !hasAnyRole(session.user.roles, LAB_ROLES_STAFF)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const rows = await prisma.asset.findMany({
-    include: { category: true, location: true },
+    where: { deletedAt: null },
+    include: { category: true, location: true, project: true },
     orderBy: { skuOrInternalId: "asc" },
   });
 
@@ -21,8 +22,9 @@ export async function GET() {
     "name",
     "category",
     "location",
-    "condition",
-    "operationalStatus",
+    "project",
+    "conditionCode",
+    "operationalStatusCode",
     "quantityTotal",
     "quantityAvailable",
     "acquiredAt",
@@ -35,8 +37,9 @@ export async function GET() {
       escapeCsvCell(a.name),
       escapeCsvCell(a.category?.name ?? ""),
       escapeCsvCell(a.location?.name ?? ""),
-      a.condition,
-      a.operationalStatus,
+      escapeCsvCell(a.project?.name ?? ""),
+      a.conditionCode,
+      a.operationalStatusCode,
       a.quantityTotal,
       a.quantityAvailable,
       a.acquiredAt?.toISOString() ?? "",

@@ -15,7 +15,7 @@ When designing or building UI in this app, prefer adding **meaningful icons** al
 ## Patterns
 
 - **Sizing**: align with existing usage — e.g. `className="size-4"` in buttons (see `components/ui/button` SVG rules), `size-3.5 text-muted-foreground` beside field labels.
-- **Next.js**: `FontAwesomeIcon` is client-only. For server components, use a small `"use client"` child (see `components/layout/app-header.tsx`, `components/notifications/notification-row.tsx`, etc.).
+- **Next.js**: `FontAwesomeIcon` is client-only. For server components, use a small `"use client"` child (see `components/layout/app-shell.tsx`, `components/notifications/notification-row.tsx`, etc.).
 - **Accessibility**: keep visible text for critical actions; use `aria-label` when the control is icon-only on small breakpoints.
 
 Do not decorate every string with an icon; use judgment on high-value surfaces and stay visually consistent with existing screens.

@@ -1,17 +1,18 @@
 import Link from "next/link";
 import { auth } from "@/auth";
-import { hasAnyRole, hasRole } from "@/lib/auth/roles";
+import { hasAnyRole, hasRole, LAB_ROLE, LAB_ROLES_STAFF } from "@/lib/auth/roles";
 import { prisma } from "@/lib/db";
 import type { CheckoutStatus } from "@prisma/client";
 import { ReturnCheckoutForm } from "@/components/checkout/return-checkout-form";
 import { CheckoutsEmpty } from "@/components/checkout/checkouts-empty";
+import { checkoutBorrowerLabel } from "@/lib/checkout/borrower-display";
 
 export default async function CheckoutsPage() {
   const session = await auth();
   const userId = session!.user!.id;
   const roles = session!.user!.roles ?? [];
-  const isAdmin = hasRole(roles, "ADMIN");
-  const canExportCheckouts = hasAnyRole(roles, ["ADMIN", "RESEARCHER"]);
+  const isAdmin = hasRole(roles, LAB_ROLE.ADMIN);
+  const canExportCheckouts = hasAnyRole(roles, LAB_ROLES_STAFF);
 
   const openStatuses: CheckoutStatus[] = ["ACTIVE", "OVERDUE"];
   const where = isAdmin
@@ -22,7 +23,7 @@ export default async function CheckoutsPage() {
     where,
     include: {
       asset: { select: { id: true, name: true, skuOrInternalId: true } },
-      user: { select: { name: true, email: true } },
+      user: { select: { name: true, email: true, deletedAt: true } },
       project: { select: { name: true } },
       assetUnit: {
         select: { serialNumber: true, trackTag: true, id: true },
@@ -73,7 +74,7 @@ export default async function CheckoutsPage() {
                       {c.asset.skuOrInternalId}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      Borrower: {c.user.name || c.user.email}
+                      Borrower: {checkoutBorrowerLabel(c.user)}
                     </p>
                     {c.project ? (
                       <p className="text-sm">Project: {c.project.name}</p>
@@ -86,7 +87,9 @@ export default async function CheckoutsPage() {
                           c.assetUnit.id.slice(-6)}
                       </p>
                     ) : null}
-                    <p className="text-sm">{c.purpose}</p>
+                    {c.purpose?.trim() ? (
+                      <p className="text-sm">{c.purpose}</p>
+                    ) : null}
                     <p
                       className={
                         c.status === "OVERDUE" || c.dueAt < new Date()

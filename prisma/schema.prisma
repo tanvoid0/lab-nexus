@@ -7,17 +7,9 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum AssetCondition {
-  WORKING
-  BROKEN
-  IN_REPAIR
-  UNKNOWN
-}
-
-enum AssetOperationalStatus {
-  AVAILABLE
-  MAINTENANCE
-  RETIRED
+enum LookupDomain {
+  ASSET_CONDITION
+  ASSET_OPERATIONAL_STATUS
 }
 
 enum CheckoutStatus {
@@ -26,47 +18,198 @@ enum CheckoutStatus {
   OVERDUE
 }
 
+enum AuditEntityType {
+  Asset
+  Checkout
+  CheckoutRequest
+  Project
+  Import
+  AssetCategory
+  Location
+  LookupEntry
+  User
+}
+
+/// Batch loan request from cart; students may need approval before checkouts are created.
+enum CheckoutRequestStatus {
+  PENDING_APPROVAL
+  FULFILLED
+  REJECTED
+}
+
+enum CheckoutRequestLineStatus {
+  PENDING
+  FULFILLED
+  REJECTED
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  RETURN
+  UNIT_CREATE
+  UNIT_DELETE
+  MEMBER_ADD
+  MEMBER_REMOVE
+  IMPORT
+  STATUS_OVERDUE
+  CATEGORY_CREATE
+  CATEGORY_UPDATE
+  CATEGORY_DELETE
+  LOCATION_CREATE
+  LOCATION_UPDATE
+  LOCATION_DELETE
+  LOOKUP_CREATE
+  LOOKUP_UPDATE
+  LOOKUP_DELETE
+}
+
 model User {
-  id           String   @id @default(auto()) @map("_id") @db.ObjectId
-  email        String   @unique
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  email        String    @unique
   passwordHash String
   name         String?
   roles        String[]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  /// Set when the account is deactivated; row kept for audit and checkout history.
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  checkouts        Checkout[]
-  auditLogs        AuditLog[]
-  custodianAssets  Asset[]           @relation("AssetCustodian")
-  projectMembers   ProjectMember[]
-  notifications    Notification[]
+  checkouts                 Checkout[]
+  auditLogs                 AuditLog[]
+  custodianAssets           Asset[]            @relation("AssetCustodian")
+  projectMembers            ProjectMember[]
+  notifications             Notification[]
+  settings                  UserSettings?
+  checkoutRequests          CheckoutRequest[]
+  reviewedCheckoutRequests  CheckoutRequest[]  @relation("CheckoutRequestReviewer")
+  userCart                  UserCart?
+  assistantInboxes          AssistantInbox[]
+
+  @@index([deletedAt])
+}
+
+/// User-scoped folder for Lab assistant threads (multiple inboxes per account).
+model AssistantInbox {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  conversations AssistantConversation[]
+
+  @@index([userId])
+  @@index([userId, sortOrder])
+}
+
+/// One chat thread; `messages` is JSON: [{ role: "user"|"assistant", content: string }, ...].
+model AssistantConversation {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  inboxId   String   @db.ObjectId
+  inbox     AssistantInbox @relation(fields: [inboxId], references: [id], onDelete: Cascade)
+  title     String   @default("New chat")
+  messages  Json
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@index([inboxId, updatedAt])
+}
+
+/// Borrow cart draft persisted server-side so it survives sign-out / new sessions.
+model UserCart {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId           String   @unique @db.ObjectId
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Validated array of display lines (asset + labels + optional unit/project).
+  lines            Json
+  defaultProjectId String?  @db.ObjectId
+  updatedAt        DateTime @updatedAt
+  createdAt        DateTime @default(now())
+}
+
+model UserSettings {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @unique @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  theme     String   @default("light")
+  density   String   @default("comfortable")
+  updatedAt DateTime @updatedAt
+}
+
+/// Singleton row (`id` = `LAB_CURRENCY_CONFIG_ID` in code). Functional currency = ERP-style **base currency**
+/// for rollups; additional codes = vendor/invoice **transaction currencies** allowed when recording spend.
+model LabCurrencyConfig {
+  id                         String   @id @map("_id")
+  functionalCurrencyCode     String
+  additionalTransactionCodes String[]
+  updatedAt                  DateTime @updatedAt
+}
+
+model LookupEntry {
+  id          String       @id @default(auto()) @map("_id") @db.ObjectId
+  domain      LookupDomain
+  code        String
+  label       String
+  sortOrder   Int          @default(0)
+  isActive    Boolean      @default(true)
+  isSystem    Boolean      @default(false)
+  description String?
+  deletedAt   DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@unique([domain, code])
+  @@index([domain, isActive, sortOrder])
+  @@index([deletedAt])
 }
 
 model AssetCategory {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  name      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  name      String    @unique
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   assets    Asset[]
+
+  @@index([deletedAt])
 }
 
 model Location {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  name      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  name      String    @unique
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   assets    Asset[]
+
+  @@index([deletedAt])
 }
 
 model Project {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  name      String
-  slug      String?  @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  name           String
+  slug           String?  @unique
+  /// Long-form summary (markdown-friendly plain text).
+  description    String?
+  /// [{ "label": "…", "url": "https://…" }] — external references (repos, wikis).
+  webLinks       Json?
+  /// [{ "label": "…", "url": "https://…" }] — specs, PDFs, shared drives (URLs only).
+  documentLinks  Json?
+  deletedAt      DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  members  ProjectMember[]
-  checkouts Checkout[]
+  members                   ProjectMember[]
+  checkouts                 Checkout[]
+  assets                    Asset[]
+  checkoutRequestsDefault   CheckoutRequest[] @relation("CheckoutRequestDefaultProject")
+  checkoutRequestLineProjects CheckoutRequestLine[]
+
+  @@index([deletedAt])
 }
 
 model ProjectMember {
@@ -84,37 +227,44 @@ model ProjectMember {
 }
 
 model Asset {
-  id                 String                 @id @default(auto()) @map("_id") @db.ObjectId
-  skuOrInternalId    String                   @unique
-  name               String
-  specs              Json?
-  condition          AssetCondition           @default(UNKNOWN)
-  operationalStatus  AssetOperationalStatus   @default(AVAILABLE)
-  quantityTotal      Int                    @default(1)
-  quantityAvailable  Int                    @default(1)
-  notes              String?
-  quoteUrl           String?
-  imagePath          String?
-  trackTag           String?                  @unique
-  acquiredAt         DateTime?
-  categoryId         String?                @db.ObjectId
-  locationId         String?                @db.ObjectId
-  custodianUserId    String?                @db.ObjectId
-  createdAt          DateTime               @default(now())
-  updatedAt          DateTime               @updatedAt
+  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
+  skuOrInternalId       String   @unique
+  name                  String
+  specs                 Json?
+  conditionCode         String   @default("UNKNOWN")
+  operationalStatusCode String   @default("AVAILABLE")
+  quantityTotal         Int      @default(1)
+  quantityAvailable     Int      @default(1)
+  notes                 String?
+  quoteUrl              String?
+  imagePath             String?
+  trackTag              String?  @unique
+  acquiredAt            DateTime?
+  categoryId            String?  @db.ObjectId
+  locationId            String?  @db.ObjectId
+  custodianUserId       String?  @db.ObjectId
+  /// Lab allocation: which project this catalog line is primarily associated with.
+  projectId             String?  @db.ObjectId
+  deletedAt             DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   category  AssetCategory? @relation(fields: [categoryId], references: [id])
   location  Location?      @relation(fields: [locationId], references: [id])
   custodian User?          @relation("AssetCustodian", fields: [custodianUserId], references: [id])
+  project   Project?       @relation(fields: [projectId], references: [id])
 
-  units     AssetUnit[]
-  checkouts Checkout[]
+  units                 AssetUnit[]
+  checkouts             Checkout[]
+  checkoutRequestLines  CheckoutRequestLine[]
 
   @@index([name])
   @@index([categoryId])
   @@index([locationId])
-  @@index([operationalStatus])
-  @@index([condition])
+  @@index([projectId])
+  @@index([operationalStatusCode])
+  @@index([conditionCode])
+  @@index([deletedAt])
 }
 
 model AssetUnit {
@@ -124,13 +274,16 @@ model AssetUnit {
   imei          String?
   trackTag      String?  @unique
   notes         String?
+  deletedAt     DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  asset     Asset      @relation(fields: [assetId], references: [id], onDelete: Cascade)
-  checkouts Checkout[]
+  asset                 Asset                 @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  checkouts             Checkout[]
+  checkoutRequestLines  CheckoutRequestLine[]
 
   @@index([assetId])
+  @@index([deletedAt])
 }
 
 model Checkout {
@@ -143,15 +296,17 @@ model Checkout {
   checkedOutAt   DateTime       @default(now())
   dueAt          DateTime
   returnedAt     DateTime?
-  purpose        String
+  purpose        String?
   conditionOut   Json?
   conditionIn    Json?
   damageReport   String?
 
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  asset     Asset      @relation(fields: [assetId], references: [id], onDelete: Cascade)
-  assetUnit AssetUnit? @relation(fields: [assetUnitId], references: [id])
-  project   Project?   @relation(fields: [projectId], references: [id])
+  user             User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset            Asset               @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  assetUnit        AssetUnit?          @relation(fields: [assetUnitId], references: [id])
+  project          Project?            @relation(fields: [projectId], references: [id])
+  /// Cart fulfillments that point at this checkout (0 or 1 in practice; no DB unique on nullable FK — Mongo rejects duplicate nulls on unique indexes).
+  cartFulfillmentLines CheckoutRequestLine[]
 
   @@index([userId])
   @@index([assetId])
@@ -159,19 +314,72 @@ model Checkout {
   @@index([dueAt])
 }
 
+model CheckoutRequest {
+  id               String                 @id @default(auto()) @map("_id") @db.ObjectId
+  userId           String                 @db.ObjectId
+  status           CheckoutRequestStatus  @default(PENDING_APPROVAL)
+  /// Applied when a line has no per-line project override.
+  defaultProjectId String?                @db.ObjectId
+  sharedPurpose    String?
+  sharedDueAt      DateTime
+  conditionOut     Json?
+  reviewerUserId   String?                @db.ObjectId
+  reviewedAt       DateTime?
+  reviewNote       String?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  defaultProject Project?               @relation("CheckoutRequestDefaultProject", fields: [defaultProjectId], references: [id])
+  reviewer       User?                  @relation("CheckoutRequestReviewer", fields: [reviewerUserId], references: [id])
+  lines          CheckoutRequestLine[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model CheckoutRequestLine {
+  id            String                   @id @default(auto()) @map("_id") @db.ObjectId
+  requestId     String                   @db.ObjectId
+  assetId       String                   @db.ObjectId
+  assetUnitId   String?                  @db.ObjectId
+  /// Optional override; falls back to request.defaultProjectId.
+  projectId     String?                  @db.ObjectId
+  status        CheckoutRequestLineStatus @default(PENDING)
+  /// Set when fulfilled; not `@unique` — MongoDB unique on optional fields treats many unset values as duplicates.
+  checkoutId    String?                  @db.ObjectId
+  rejectReason  String?
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+
+  request   CheckoutRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  asset     Asset           @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  assetUnit AssetUnit?      @relation(fields: [assetUnitId], references: [id])
+  project   Project?        @relation(fields: [projectId], references: [id])
+  checkout  Checkout?       @relation(fields: [checkoutId], references: [id])
+
+  @@index([requestId])
+  @@index([checkoutId])
+  @@index([status])
+}
+
+// Audit rows use enum fields only. Databases seeded before these enums need AuditLog cleared or reset.
 model AuditLog {
-  id         String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId     String?  @db.ObjectId
-  entityType String
+  id         String          @id @default(auto()) @map("_id") @db.ObjectId
+  userId     String?         @db.ObjectId
+  entityType AuditEntityType
   entityId   String
-  action     String
+  action     AuditAction
   diff       Json?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime        @default(now())
 
   user User? @relation(fields: [userId], references: [id])
 
   @@index([entityType, entityId])
   @@index([createdAt])
+  @@index([userId])
+  @@index([entityType, createdAt])
 }
 
 model Notification {

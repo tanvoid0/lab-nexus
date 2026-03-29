@@ -8,20 +8,23 @@ import {
   faBarcode,
   faCamera,
   faCube,
+  faDiagramProject,
   faFloppyDisk,
   faLink,
   faNoteSticky,
   faPenToSquare,
   faTag,
 } from "@fortawesome/free-solid-svg-icons";
-import type { Asset, AssetCategory, Location, User } from "@prisma/client";
+import type { Asset, AssetCategory, Location, Project, User } from "@prisma/client";
 import { createAssetAction, updateAssetAction } from "@/lib/actions/assets";
 import type { ActionResult } from "@/lib/form/action-result";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { FieldError } from "@/components/form/field-error";
 import { SubmitButton } from "@/components/form/submit-button";
+import { mergeLookupOptions } from "@/lib/reference/merge-lookup-options";
 import {
   Card,
   CardContent,
@@ -29,6 +32,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { nativeSelectClassName } from "@/lib/form/native-field-classes";
 
 const initial: ActionResult = { ok: true };
 
@@ -37,10 +41,28 @@ export type AssetFormProps = {
   asset?: Asset;
   categories: AssetCategory[];
   locations: Location[];
+  projects: Pick<Project, "id" | "name">[];
   users: Pick<User, "id" | "name" | "email">[];
+  conditionLookups: { code: string; label: string }[];
+  operationalStatusLookups: { code: string; label: string }[];
 };
 
-export function AssetForm({ mode, asset, categories, locations, users }: AssetFormProps) {
+export function AssetForm({
+  mode,
+  asset,
+  categories,
+  locations,
+  projects,
+  users,
+  conditionLookups,
+  operationalStatusLookups,
+}: AssetFormProps) {
+  const conditionOptions = mergeLookupOptions(conditionLookups, asset?.conditionCode);
+  const operationalOptions = mergeLookupOptions(
+    operationalStatusLookups,
+    asset?.operationalStatusCode,
+  );
+
   const action = mode === "create" ? createAssetAction : updateAssetAction;
   const [state, formAction] = useActionState(action, initial);
 
@@ -141,31 +163,31 @@ export function AssetForm({ mode, asset, categories, locations, users }: AssetFo
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="condition">Condition</Label>
+              <Label htmlFor="conditionCode">Condition</Label>
               <select
-                id="condition"
-                name="condition"
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                defaultValue={asset?.condition ?? "UNKNOWN"}
+                id="conditionCode"
+                name="conditionCode"
+                className={nativeSelectClassName()}
+                defaultValue={asset?.conditionCode ?? "UNKNOWN"}
               >
-                {(["WORKING", "BROKEN", "IN_REPAIR", "UNKNOWN"] as const).map((c) => (
-                  <option key={c} value={c}>
-                    {c.replace("_", " ")}
+                {conditionOptions.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.label}
                   </option>
                 ))}
               </select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="operationalStatus">Operational status</Label>
+              <Label htmlFor="operationalStatusCode">Operational status</Label>
               <select
-                id="operationalStatus"
-                name="operationalStatus"
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                defaultValue={asset?.operationalStatus ?? "AVAILABLE"}
+                id="operationalStatusCode"
+                name="operationalStatusCode"
+                className={nativeSelectClassName()}
+                defaultValue={asset?.operationalStatusCode ?? "AVAILABLE"}
               >
-                {(["AVAILABLE", "MAINTENANCE", "RETIRED"] as const).map((s) => (
-                  <option key={s} value={s}>
-                    {s.replace("_", " ")}
+                {operationalOptions.map((s) => (
+                  <option key={s.code} value={s.code}>
+                    {s.label}
                   </option>
                 ))}
               </select>
@@ -207,7 +229,7 @@ export function AssetForm({ mode, asset, categories, locations, users }: AssetFo
               <select
                 id="categoryId"
                 name="categoryId"
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                className={nativeSelectClassName()}
                 defaultValue={asset?.categoryId ?? ""}
               >
                 <option value="">—</option>
@@ -223,7 +245,7 @@ export function AssetForm({ mode, asset, categories, locations, users }: AssetFo
               <select
                 id="locationId"
                 name="locationId"
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                className={nativeSelectClassName()}
                 defaultValue={asset?.locationId ?? ""}
               >
                 <option value="">—</option>
@@ -237,11 +259,36 @@ export function AssetForm({ mode, asset, categories, locations, users }: AssetFo
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="projectId" className="inline-flex items-center gap-2">
+              <FontAwesomeIcon
+                icon={faDiagramProject}
+                className="size-3.5 text-muted-foreground"
+              />
+              Project (allocation)
+            </Label>
+            <select
+              id="projectId"
+              name="projectId"
+              className={nativeSelectClassName()}
+              defaultValue={asset?.projectId ?? ""}
+              aria-invalid={!!(!state.ok && state.fieldErrors?.projectId)}
+            >
+              <option value="">— None —</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+            <FieldError errors={state.ok ? undefined : state.fieldErrors?.projectId} />
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="custodianUserId">Custodian</Label>
             <select
               id="custodianUserId"
               name="custodianUserId"
-              className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+              className={nativeSelectClassName()}
               defaultValue={asset?.custodianUserId ?? ""}
             >
               <option value="">—</option>
@@ -322,9 +369,4 @@ export function AssetForm({ mode, asset, categories, locations, users }: AssetFo
       </CardContent>
     </Card>
   );
-}
-
-function FieldError({ errors }: { errors?: string[] }) {
-  if (!errors?.length) return null;
-  return <p className="text-sm text-destructive">{errors[0]}</p>;
 }

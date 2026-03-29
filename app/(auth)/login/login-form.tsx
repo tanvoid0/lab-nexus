@@ -7,6 +7,7 @@ import {
   faCircleExclamation,
   faEnvelope,
   faLock,
+  faUserGraduate,
   faUserShield,
   faUserTie,
 } from "@fortawesome/free-solid-svg-icons";
@@ -151,11 +152,11 @@ export function LoginForm() {
                 Development quick sign-in (same users as{" "}
                 <code className="rounded bg-muted px-1">pnpm db:seed</code>)
               </p>
-              <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <Button
                   type="button"
                   variant="outline"
-                  className="flex-1"
+                  className="w-full"
                   disabled={devPending}
                   onClick={() => quickLogin("admin")}
                 >
@@ -165,12 +166,22 @@ export function LoginForm() {
                 <Button
                   type="button"
                   variant="outline"
-                  className="flex-1"
+                  className="w-full"
                   disabled={devPending}
                   onClick={() => quickLogin("staff")}
                 >
                   <FontAwesomeIcon icon={faUserTie} className="size-4" />
                   Login as staff
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  disabled={devPending}
+                  onClick={() => quickLogin("student")}
+                >
+                  <FontAwesomeIcon icon={faUserGraduate} className="size-4" />
+                  Login as student
                 </Button>
               </div>
             </div>

@@ -1,0 +1,9 @@
+{
+  "version": 1.1,
+  "atDirectives": [
+    {
+      "name": "@theme",
+      "description": "Tailwind CSS v4 theme layer: maps CSS variables to design tokens (e.g. @theme inline { ... })."
+    }
+  ]
+}

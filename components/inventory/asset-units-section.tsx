@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useId } from "react";
+import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faBarcode,
@@ -8,6 +9,7 @@ import {
   faFingerprint,
   faNoteSticky,
   faPlus,
+  faQrcode,
   faTag,
   faTrash,
 } from "@fortawesome/free-solid-svg-icons";
@@ -28,7 +30,18 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { type AssetUnitRow, unitLabel } from "@/lib/inventory/asset-unit";
+import { scanPathForTrackTag } from "@/lib/nav/inventory-paths";
 
 const initial: ActionResult = { ok: true };
 
@@ -97,8 +110,25 @@ export function AssetUnitsSection({
                     </p>
                   ) : null}
                 </div>
-                {canManage && !u.onLoan ? (
-                  <DeleteUnitButton unitId={u.id} />
+                {u.trackTag?.trim() || (canManage && !u.onLoan) ? (
+                  <div className="flex flex-wrap gap-2 self-start sm:self-center">
+                    {u.trackTag?.trim() ? (
+                      <Button
+                        asChild
+                        variant="outline"
+                        size="sm"
+                        className="min-h-11 gap-1.5 sm:min-h-9"
+                      >
+                        <Link href={scanPathForTrackTag(u.trackTag.trim())}>
+                          <FontAwesomeIcon icon={faQrcode} className="size-3.5" />
+                          Open scan
+                        </Link>
+                      </Button>
+                    ) : null}
+                    {canManage && !u.onLoan ? (
+                      <DeleteUnitButton unitId={u.id} />
+                    ) : null}
+                  </div>
                 ) : null}
               </li>
             ))}
@@ -175,17 +205,50 @@ export function AssetUnitsSection({
 
 function DeleteUnitButton({ unitId }: { unitId: string }) {
   const [state, formAction] = useActionState(deleteAssetUnitAction, initial);
+  const formId = useId();
   return (
-    <form action={formAction} className="shrink-0">
-      <input type="hidden" name="unitId" value={unitId} />
-      {!state.ok && state.formError ? (
-        <p className="mb-2 text-xs text-destructive">{state.formError}</p>
-      ) : null}
-      <Button type="submit" variant="outline" size="sm" className="gap-1.5">
-        <FontAwesomeIcon icon={faTrash} className="size-3.5" />
-        Remove
-      </Button>
-    </form>
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="min-h-11 gap-1.5 self-start sm:min-h-9"
+        >
+          <FontAwesomeIcon icon={faTrash} className="size-3.5" />
+          Remove
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Remove this unit?</AlertDialogTitle>
+          <AlertDialogDescription>
+            The unit will be removed from this asset. This cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        {!state.ok && state.formError ? (
+          <p className="text-sm text-destructive" role="alert">
+            {state.formError}
+          </p>
+        ) : null}
+        <form id={formId} action={formAction} className="hidden">
+          <input type="hidden" name="unitId" value={unitId} />
+        </form>
+        <AlertDialogFooter>
+          <AlertDialogCancel type="button" className="min-h-11 sm:min-h-9">
+            Cancel
+          </AlertDialogCancel>
+          <Button
+            type="submit"
+            form={formId}
+            variant="destructive"
+            className="min-h-11 w-full sm:min-h-9 sm:w-auto"
+          >
+            Remove unit
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 

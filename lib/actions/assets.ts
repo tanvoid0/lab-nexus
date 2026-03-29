@@ -1,22 +1,28 @@
 "use server";
 
 import { auth } from "@/auth";
+import { AuditAction, AuditEntityType } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
-import { assertAnyRole } from "@/lib/auth/roles";
+import { assetAuditSnapshot, changedFieldDiff } from "@/lib/audit/asset-diff";
+import { assertAnyRole, LAB_ROLES_ADMIN_ONLY, LAB_ROLES_STAFF } from "@/lib/auth/roles";
 import {
   failure,
   zodErrorToFieldErrors,
   type ActionResult,
 } from "@/lib/form/action-result";
 import { assetCreateSchema, assetUpdateSchema } from "@/lib/schemas/asset";
+import {
+  LookupValidationError,
+  requireActiveLookupCode,
+} from "@/lib/reference/lookup-validation";
 import { prisma } from "@/lib/db";
+import { notDeleted } from "@/lib/prisma/active-scopes";
+import { appendArchivedSuffix } from "@/lib/soft-delete/archive-keys";
 import { randomBytes } from "crypto";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-
-const CAN_EDIT = ["ADMIN", "RESEARCHER"] as const;
 
 function parseSpecs(raw: string | undefined): object | undefined {
   if (!raw?.trim()) return undefined;
@@ -52,7 +58,7 @@ export async function createAssetAction(
   const session = await auth();
   if (!session?.user?.id) return failure({ formError: "Sign in required." });
   try {
-    assertAnyRole(session.user.roles, CAN_EDIT);
+    assertAnyRole(session.user.roles, LAB_ROLES_STAFF);
   } catch {
     return failure({ formError: "You cannot create assets." });
   }
@@ -71,14 +77,15 @@ export async function createAssetAction(
     skuOrInternalId: formData.get("skuOrInternalId"),
     name: formData.get("name"),
     specs: formData.get("specs") as string | undefined,
-    condition: formData.get("condition"),
-    operationalStatus: formData.get("operationalStatus"),
+    conditionCode: formData.get("conditionCode"),
+    operationalStatusCode: formData.get("operationalStatusCode"),
     quantityTotal: formData.get("quantityTotal"),
     quantityAvailable: formData.get("quantityAvailable"),
     notes: formData.get("notes") as string | undefined,
     quoteUrl: formData.get("quoteUrl") as string | undefined,
     categoryId: formData.get("categoryId") as string | undefined,
     locationId: formData.get("locationId") as string | undefined,
+    projectId: formData.get("projectId") as string | undefined,
     custodianUserId: formData.get("custodianUserId") as string | undefined,
     acquiredAt: formData.get("acquiredAt") as string | undefined,
     trackTag: formData.get("trackTag") as string | undefined,
@@ -88,6 +95,7 @@ export async function createAssetAction(
     ...raw,
     categoryId: raw.categoryId || undefined,
     locationId: raw.locationId || undefined,
+    projectId: raw.projectId || undefined,
     custodianUserId: raw.custodianUserId || undefined,
     quoteUrl: raw.quoteUrl || undefined,
     trackTag: raw.trackTag || undefined,
@@ -102,6 +110,18 @@ export async function createAssetAction(
   }
 
   const d = parsed.data;
+  try {
+    await requireActiveLookupCode(prisma, "ASSET_CONDITION", d.conditionCode);
+    await requireActiveLookupCode(
+      prisma,
+      "ASSET_OPERATIONAL_STATUS",
+      d.operationalStatusCode,
+    );
+  } catch (e) {
+    const msg = e instanceof LookupValidationError ? e.message : "Invalid lookup value.";
+    return failure({ formError: msg });
+  }
+
   const qtyAvail =
     d.quantityAvailable ?? d.quantityTotal;
 
@@ -113,6 +133,18 @@ export async function createAssetAction(
     });
   }
 
+  const pidCreate = d.projectId?.trim();
+  let projectIdForCreate: string | undefined;
+  if (pidCreate) {
+    const projRow = await prisma.project.findFirst({
+      where: { id: pidCreate, ...notDeleted },
+    });
+    if (!projRow) {
+      return failure({ fieldErrors: { projectId: ["Unknown project."] } });
+    }
+    projectIdForCreate = pidCreate;
+  }
+
   let asset;
   try {
     asset = await prisma.asset.create({
@@ -120,8 +152,8 @@ export async function createAssetAction(
         skuOrInternalId: d.skuOrInternalId.trim(),
         name: d.name.trim(),
         specs: parseSpecs(d.specs),
-        condition: d.condition,
-        operationalStatus: d.operationalStatus,
+        conditionCode: d.conditionCode,
+        operationalStatusCode: d.operationalStatusCode,
         quantityTotal: d.quantityTotal,
         quantityAvailable: qtyAvail,
         notes: d.notes?.trim() || undefined,
@@ -129,6 +161,7 @@ export async function createAssetAction(
         imagePath,
         categoryId: d.categoryId || undefined,
         locationId: d.locationId || undefined,
+        projectId: projectIdForCreate,
         custodianUserId: d.custodianUserId || undefined,
         trackTag: d.trackTag?.trim() || undefined,
         acquiredAt: d.acquiredAt ? new Date(d.acquiredAt) : undefined,
@@ -144,14 +177,17 @@ export async function createAssetAction(
 
   await writeAuditLog({
     userId: session.user.id,
-    entityType: "Asset",
+    entityType: AuditEntityType.Asset,
     entityId: asset.id,
-    action: "CREATE",
+    action: AuditAction.CREATE,
     diff: { skuOrInternalId: asset.skuOrInternalId, name: asset.name },
   });
 
   revalidatePath("/inventory");
   revalidatePath(`/inventory/${asset.id}`);
+  if (asset.projectId) {
+    revalidatePath(`/projects/${asset.projectId}`);
+  }
   redirect(`/inventory/${asset.id}`);
 }
 
@@ -162,7 +198,7 @@ export async function updateAssetAction(
   const session = await auth();
   if (!session?.user?.id) return failure({ formError: "Sign in required." });
   try {
-    assertAnyRole(session.user.roles, CAN_EDIT);
+    assertAnyRole(session.user.roles, LAB_ROLES_STAFF);
   } catch {
     return failure({ formError: "You cannot edit assets." });
   }
@@ -183,14 +219,15 @@ export async function updateAssetAction(
     skuOrInternalId: formData.get("skuOrInternalId"),
     name: formData.get("name"),
     specs: formData.get("specs") as string | undefined,
-    condition: formData.get("condition"),
-    operationalStatus: formData.get("operationalStatus"),
+    conditionCode: formData.get("conditionCode"),
+    operationalStatusCode: formData.get("operationalStatusCode"),
     quantityTotal: formData.get("quantityTotal"),
     quantityAvailable: formData.get("quantityAvailable"),
     notes: formData.get("notes") as string | undefined,
     quoteUrl: formData.get("quoteUrl") as string | undefined,
     categoryId: formData.get("categoryId") as string | undefined,
     locationId: formData.get("locationId") as string | undefined,
+    projectId: formData.get("projectId") as string | undefined,
     custodianUserId: formData.get("custodianUserId") as string | undefined,
     acquiredAt: formData.get("acquiredAt") as string | undefined,
     trackTag: formData.get("trackTag") as string | undefined,
@@ -200,6 +237,7 @@ export async function updateAssetAction(
     ...raw,
     categoryId: raw.categoryId || undefined,
     locationId: raw.locationId || undefined,
+    projectId: raw.projectId || undefined,
     custodianUserId: raw.custodianUserId || undefined,
     quoteUrl: raw.quoteUrl || undefined,
     trackTag: raw.trackTag || undefined,
@@ -214,7 +252,21 @@ export async function updateAssetAction(
   }
 
   const d = parsed.data;
-  const existing = await prisma.asset.findUnique({ where: { id: d.id } });
+  try {
+    await requireActiveLookupCode(prisma, "ASSET_CONDITION", d.conditionCode);
+    await requireActiveLookupCode(
+      prisma,
+      "ASSET_OPERATIONAL_STATUS",
+      d.operationalStatusCode,
+    );
+  } catch (e) {
+    const msg = e instanceof LookupValidationError ? e.message : "Invalid lookup value.";
+    return failure({ formError: msg });
+  }
+
+  const existing = await prisma.asset.findFirst({
+    where: { id: d.id, ...notDeleted },
+  });
   if (!existing) return failure({ formError: "Asset not found." });
 
   const activeCheckouts = await prisma.checkout.count({
@@ -238,18 +290,31 @@ export async function updateAssetAction(
     });
   }
 
+  const pidUpdate = d.projectId?.trim();
+  let projectIdForUpdate: string | null = null;
+  if (pidUpdate) {
+    const projRow = await prisma.project.findFirst({
+      where: { id: pidUpdate, ...notDeleted },
+    });
+    if (!projRow) {
+      return failure({ fieldErrors: { projectId: ["Unknown project."] } });
+    }
+    projectIdForUpdate = pidUpdate;
+  }
+
   const data: Parameters<typeof prisma.asset.update>[0]["data"] = {
     skuOrInternalId: d.skuOrInternalId.trim(),
     name: d.name.trim(),
     specs: parseSpecs(d.specs) ?? undefined,
-    condition: d.condition,
-    operationalStatus: d.operationalStatus,
+    conditionCode: d.conditionCode,
+    operationalStatusCode: d.operationalStatusCode,
     quantityTotal: d.quantityTotal,
     quantityAvailable: qtyAvail,
     notes: d.notes?.trim() || undefined,
     quoteUrl: d.quoteUrl?.trim() || undefined,
     categoryId: d.categoryId || null,
     locationId: d.locationId || null,
+    projectId: projectIdForUpdate,
     custodianUserId: d.custodianUserId || null,
     trackTag: d.trackTag?.trim() || null,
     acquiredAt: d.acquiredAt ? new Date(d.acquiredAt) : null,
@@ -270,16 +335,23 @@ export async function updateAssetAction(
     return failure({ formError: msg });
   }
 
+  const beforeSnap = assetAuditSnapshot(existing);
+  const afterSnap = assetAuditSnapshot(updated);
   await writeAuditLog({
     userId: session.user.id,
-    entityType: "Asset",
+    entityType: AuditEntityType.Asset,
     entityId: updated.id,
-    action: "UPDATE",
-    diff: { skuOrInternalId: updated.skuOrInternalId },
+    action: AuditAction.UPDATE,
+    diff: changedFieldDiff(beforeSnap, afterSnap),
   });
 
   revalidatePath("/inventory");
   revalidatePath(`/inventory/${updated.id}`);
+  const projectPaths = new Set<string>();
+  if (existing.projectId) projectPaths.add(`/projects/${existing.projectId}`);
+  if (updated.projectId) projectPaths.add(`/projects/${updated.projectId}`);
+  for (const p of projectPaths) revalidatePath(p);
+
   redirect(`/inventory/${updated.id}`);
 }
 
@@ -295,7 +367,7 @@ export async function deleteAssetFormAction(
   const session = await auth();
   if (!session?.user?.id) return failure({ formError: "Sign in required." });
   try {
-    assertAnyRole(session.user.roles, ["ADMIN"]);
+    assertAnyRole(session.user.roles, LAB_ROLES_ADMIN_ONLY);
   } catch {
     return failure({ formError: "Only admins can delete assets." });
   }
@@ -307,17 +379,59 @@ export async function deleteAssetFormAction(
     return failure({ formError: "Close all checkouts before deleting." });
   }
 
+  const toRemove = await prisma.asset.findFirst({
+    where: { id: assetId, ...notDeleted },
+  });
+  if (!toRemove) {
+    return failure({ formError: "Asset not found." });
+  }
+
+  const now = new Date();
+  const newSku = appendArchivedSuffix(toRemove.skuOrInternalId, toRemove.id, 200);
+  const newTrackTag =
+    toRemove.trackTag != null && toRemove.trackTag !== ""
+      ? appendArchivedSuffix(toRemove.trackTag, toRemove.id, 200)
+      : null;
+
+  const units = await prisma.assetUnit.findMany({
+    where: { assetId, ...notDeleted },
+  });
+
   try {
-    await prisma.asset.delete({ where: { id: assetId } });
+    await prisma.$transaction([
+      ...units.map((u) => {
+        const tag =
+          u.trackTag != null && u.trackTag !== ""
+            ? appendArchivedSuffix(u.trackTag, u.id, 200)
+            : null;
+        return prisma.assetUnit.update({
+          where: { id: u.id },
+          data: { deletedAt: now, trackTag: tag },
+        });
+      }),
+      prisma.asset.update({
+        where: { id: assetId },
+        data: {
+          deletedAt: now,
+          skuOrInternalId: newSku,
+          trackTag: newTrackTag,
+        },
+      }),
+    ]);
   } catch {
-    return failure({ formError: "Could not delete asset." });
+    return failure({ formError: "Could not archive asset." });
   }
 
   await writeAuditLog({
     userId: session.user.id,
-    entityType: "Asset",
+    entityType: AuditEntityType.Asset,
     entityId: assetId,
-    action: "DELETE",
+    action: AuditAction.DELETE,
+    diff: {
+      skuOrInternalId: toRemove.skuOrInternalId,
+      name: toRemove.name,
+      soft: true,
+    },
   });
   revalidatePath("/inventory");
   redirect("/inventory");

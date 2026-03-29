@@ -1,0 +1,32 @@
+# dependencies & build output
+node_modules
+.next
+out
+
+# git & IDE
+.git
+.github
+.vscode
+
+# env & local secrets (Compose injects via env_file at runtime)
+.env
+.env.*
+!.env.example
+
+# test & coverage
+coverage
+playwright-report
+test-results
+blob-report
+e2e
+
+# uploads (optional local data)
+public/uploads/*
+!public/uploads/.gitkeep
+
+# misc
+*.md
+!README.md
+.DS_Store
+*.tsbuildinfo
+pnpm-debug.log*

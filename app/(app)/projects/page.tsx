@@ -1,8 +1,12 @@
 import Link from "next/link";
 import { auth } from "@/auth";
-import { hasAnyRole } from "@/lib/auth/roles";
+import { hasAnyRole, LAB_ROLES_STAFF } from "@/lib/auth/roles";
 import { prisma } from "@/lib/db";
+import { notDeleted } from "@/lib/prisma/active-scopes";
 import { CreateProjectForm } from "@/components/projects/create-project-form";
+import { ProjectsDirectory } from "@/components/projects/projects-directory";
+import { toProjectListRow } from "@/lib/project/to-project-list-row";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -14,53 +18,59 @@ import {
 export default async function ProjectsPage() {
   const session = await auth();
   const roles = session!.user!.roles ?? [];
-  const canManage = hasAnyRole(roles, ["ADMIN", "RESEARCHER"]);
+  const canManage = hasAnyRole(roles, LAB_ROLES_STAFF);
 
   const projects = await prisma.project.findMany({
+    where: { ...notDeleted },
     orderBy: { name: "asc" },
     include: {
-      _count: { select: { members: true } },
+      _count: {
+        select: {
+          members: true,
+          assets: { where: { ...notDeleted } },
+        },
+      },
     },
   });
 
+  const rows = projects.map(toProjectListRow);
+
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold text-primary">Projects</h1>
-        <p className="text-sm text-muted-foreground">
-          Tie checkouts to a lab project. Anyone signed in can view the list;
-          researchers and admins can create projects and manage members.
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-primary">Projects</h1>
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+            Each project can hold a profile (description, document and web links),
+            team members, and assigned inventory. Checkouts can still be tied to a
+            project at loan time.
+          </p>
+        </div>
+        {canManage ? (
+          <Button variant="outline" size="sm" asChild className="shrink-0 self-start">
+            <Link href="/inventory">Browse inventory</Link>
+          </Button>
+        ) : null}
       </div>
 
       <div className="grid gap-8 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
           <Card className="border-border">
-            <CardHeader>
-              <CardTitle className="text-primary">All projects</CardTitle>
-              <CardDescription>Open a project to manage its members.</CardDescription>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-primary">
+                All projects
+                {projects.length > 0 ? (
+                  <span className="ml-2 font-normal text-muted-foreground">
+                    ({projects.length})
+                  </span>
+                ) : null}
+              </CardTitle>
+              <CardDescription>
+                Open a project for its profile, members, and assigned assets.
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              {projects.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No projects yet.</p>
-              ) : (
-                <ul className="divide-y divide-border rounded-md border border-border">
-                  {projects.map((p) => (
-                    <li key={p.id}>
-                      <Link
-                        href={`/projects/${p.id}`}
-                        className="flex items-center justify-between gap-4 px-4 py-3 text-sm transition-colors hover:bg-muted/60"
-                      >
-                        <span className="font-medium text-primary">{p.name}</span>
-                        <span className="shrink-0 text-muted-foreground">
-                          {p._count.members} member
-                          {p._count.members === 1 ? "" : "s"}
-                        </span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <ProjectsDirectory projects={rows} canCreateProject={canManage} />
             </CardContent>
           </Card>
         </div>
