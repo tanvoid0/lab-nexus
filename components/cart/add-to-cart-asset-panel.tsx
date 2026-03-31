@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCartPlus, faMicrochip } from "@fortawesome/free-solid-svg-icons";
+import { faListCheck, faMicrochip, faPlus } from "@fortawesome/free-solid-svg-icons";
 import { toast } from "sonner";
 import { useCart } from "@/components/providers/cart-provider";
 import { Button } from "@/components/ui/button";
@@ -40,15 +40,16 @@ export function AddToCartAssetPanel({
     <Card className="border-border">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg text-primary">
-          <FontAwesomeIcon icon={faCartPlus} className="size-5" />
-          Add to cart
+          <FontAwesomeIcon icon={faListCheck} className="size-5" />
+          Add to request list
         </CardTitle>
         <CardDescription>
-          Queue this item with others on the{" "}
+          Add this item to your{" "}
           <Link href="/cart" className="text-primary underline-offset-4 hover:underline">
-            cart page
+            request list
           </Link>
-          , then set a due date (and optional purpose). You can optionally tie the loan to a project there.
+          , then set a due date and optional purpose before submitting. You can also link the
+          request to a project there.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -87,11 +88,11 @@ export function AddToCartAssetPanel({
               skuOrInternalId,
               assetUnitId: requiresUnit ? unitId : undefined,
             });
-            toast.success(`${name} added to cart.`);
+            toast.success(`${name} added to your request list.`);
           }}
         >
-          <FontAwesomeIcon icon={faCartPlus} className="size-4" />
-          {inCart ? "Already in cart" : "Add to cart"}
+          <FontAwesomeIcon icon={faPlus} className="size-4" />
+          {inCart ? "Already selected" : "Add to request list"}
         </Button>
       </CardContent>
     </Card>

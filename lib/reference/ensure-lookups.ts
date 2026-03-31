@@ -20,8 +20,10 @@ export async function ensureDefaultLookupEntries(prisma: PrismaClient): Promise<
       update: {
         label: row.label,
         sortOrder: row.sortOrder,
+        isActive: true,
         isSystem: row.isSystem,
         description: row.description ?? undefined,
+        deletedAt: null,
       },
     });
   }

@@ -20,9 +20,10 @@ export default async function CartPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-primary">Cart</h1>
+        <h1 className="text-2xl font-semibold text-primary">Request list</h1>
         <p className="text-sm text-muted-foreground">
-          Bundle equipment, set a shared due date, then submit. Purpose and project are optional if you want loans documented for reporting.
+          Select equipment, set shared request details, then submit for review or direct issue.
+          Purpose and project stay optional for reporting.
         </p>
       </div>
       <CartCheckoutForm projects={projects} />

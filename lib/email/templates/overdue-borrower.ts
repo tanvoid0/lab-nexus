@@ -51,7 +51,7 @@ export function buildOverdueBorrowerEmail(
     "",
     "Please return it or contact the lab if you need help.",
     "",
-    "— Lab Nexus — Vehicle Computing Lab",
+    "— Vehicle Computing Lab",
   ];
   if (checkoutsUrl) {
     textLines.push("", `Checkouts: ${checkoutsUrl}`);
@@ -61,7 +61,7 @@ export function buildOverdueBorrowerEmail(
   }
 
   return {
-    subject: `[Lab Nexus] Overdue: ${params.assetName}`,
+    subject: `[Vehicle Computing Lab] Overdue: ${params.assetName}`,
     html,
     text: textLines.join("\n"),
   };

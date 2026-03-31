@@ -1,4 +1,11 @@
 import Link from "next/link";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faBox,
+  faFlagCheckered,
+  faLink as faLinkIcon,
+  faUsers,
+} from "@fortawesome/free-solid-svg-icons";
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { hasAnyRole, LAB_ROLES, LAB_ROLES_STAFF } from "@/lib/auth/roles";
@@ -9,6 +16,7 @@ import { ProjectMembersPanel } from "@/components/projects/project-members-panel
 import { ProjectDetailsForm } from "@/components/projects/project-details-form";
 import { Button } from "@/components/ui/button";
 import { normalizeUrlEntries } from "@/lib/project/normalize-url-entries";
+import { getProjectStatusMeta } from "@/lib/project/status";
 import { toAssetListItem } from "@/lib/mappers/asset";
 import { loadLookupLabelMaps } from "@/lib/reference/lookup-label-maps";
 import { InventoryAssetTable } from "@/components/inventory/inventory-asset-table";
@@ -65,6 +73,7 @@ export default async function ProjectDetailPage({
   const operationalLabels = Object.fromEntries(
     labelMaps.operationalStatusLabelByCode,
   );
+  const statusMeta = getProjectStatusMeta(project.status);
 
   const hasReadOnlyProfile =
     Boolean(project.description?.trim()) ||
@@ -85,15 +94,61 @@ export default async function ProjectDetailPage({
             <Link href="/projects">← Projects</Link>
           </Button>
           <h1 className="text-2xl font-semibold text-primary">{project.name}</h1>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${statusMeta.badgeClassName}`}
+            >
+              <FontAwesomeIcon icon={faFlagCheckered} className="size-3" />
+              {statusMeta.label}
+            </span>
+            <span className="text-sm text-muted-foreground">{statusMeta.description}</span>
+          </div>
           {project.slug ? (
             <p className="font-mono text-sm text-muted-foreground">{project.slug}</p>
           ) : null}
         </div>
       </div>
 
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base text-primary">
+              <FontAwesomeIcon icon={faUsers} className="size-4" />
+              Members
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-3xl font-semibold tabular-nums">
+            {project.members.length}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base text-primary">
+              <FontAwesomeIcon icon={faBox} className="size-4" />
+              Assigned assets
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-3xl font-semibold tabular-nums">
+            {assignedRows.length}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base text-primary">
+              <FontAwesomeIcon icon={faLinkIcon} className="size-4" />
+              References
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-3xl font-semibold tabular-nums">
+            {webLinks.length + documentLinks.length}
+          </CardContent>
+        </Card>
+      </div>
+
       {canManage ? (
         <ProjectDetailsForm
           projectId={project.id}
+          status={project.status}
           description={project.description}
           webLinks={webLinks}
           documentLinks={documentLinks}

@@ -1,10 +1,17 @@
 "use client";
 
 import { useActionState, useEffect } from "react";
+import { ProjectStatus } from "@prisma/client";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faDiagramProject, faLink, faSignature } from "@fortawesome/free-solid-svg-icons";
+import {
+  faDiagramProject,
+  faFlagCheckered,
+  faLink,
+  faSignature,
+} from "@fortawesome/free-solid-svg-icons";
 import { createProjectAction } from "@/lib/actions/project";
 import type { ActionResult } from "@/lib/form/action-result";
+import { PROJECT_STATUS_ORDER, getProjectStatusMeta } from "@/lib/project/status";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { SubmitButton } from "@/components/form/submit-button";
@@ -69,6 +76,31 @@ export function CreateProjectForm() {
             </Label>
             <Input id="proj-slug" name="slug" maxLength={120} placeholder="e.g. winter-field-test" />
             {fieldErr(state, "slug")}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="proj-status" className="inline-flex items-center gap-2">
+              <FontAwesomeIcon
+                icon={faFlagCheckered}
+                className="size-3.5 text-muted-foreground"
+              />
+              Status
+            </Label>
+            <select
+              id="proj-status"
+              name="status"
+              defaultValue={ProjectStatus.PLANNED}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+            >
+              {PROJECT_STATUS_ORDER.map((status) => (
+                <option key={status} value={status}>
+                  {getProjectStatusMeta(status).label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Set the initial delivery stage so the board view is useful immediately.
+            </p>
+            {fieldErr(state, "status")}
           </div>
           <SubmitButton pendingLabel="Creating…">
             <FontAwesomeIcon icon={faDiagramProject} className="size-4" />

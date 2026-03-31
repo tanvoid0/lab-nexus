@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { useActionState, useEffect } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faArrowRightToBracket,
   faCircleExclamation,
+  faFlask,
   faEnvelope,
   faLock,
   faUserGraduate,
@@ -12,10 +13,7 @@ import {
   faUserTie,
 } from "@fortawesome/free-solid-svg-icons";
 import { loginAction } from "@/lib/actions/login";
-import {
-  devQuickLoginAction,
-  type DevQuickLoginPreset,
-} from "@/lib/actions/dev-quick-login";
+import { devQuickLoginAction } from "@/lib/actions/dev-quick-login";
 import type { ActionResult } from "@/lib/form/action-result";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,9 +33,17 @@ const isDev = process.env.NODE_ENV === "development";
 
 export function LoginForm() {
   const [state, formAction] = useActionState(loginAction, initial);
-  const formRef = useRef<HTMLFormElement>(null);
-  const [devError, setDevError] = useState<string | null>(null);
-  const [devPending, startDevTransition] = useTransition();
+  const [_quickLoginState, quickLoginAction, quickLoginPending] = useActionState(
+    async (_prev: ActionResult, formData: FormData): Promise<ActionResult> => {
+      const preset = formData.get("preset");
+      if (preset !== "admin" && preset !== "staff" && preset !== "student") {
+        return { ok: false, formError: "Choose a demo account to continue." };
+      }
+      return devQuickLoginAction(preset);
+    },
+    initial,
+  );
+  const quickLoginState = _quickLoginState;
 
   useEffect(() => {
     if (!state.ok && state.fieldErrors) {
@@ -51,16 +57,6 @@ export function LoginForm() {
     }
   }, [state]);
 
-  function quickLogin(preset: DevQuickLoginPreset) {
-    setDevError(null);
-    startDevTransition(async () => {
-      const result = await devQuickLoginAction(preset);
-      if (!result.ok && result.formError) {
-        setDevError(result.formError);
-      }
-    });
-  }
-
   return (
     <Card className="w-full max-w-md border-border shadow-md">
       <CardHeader>
@@ -72,8 +68,8 @@ export function LoginForm() {
           Use your email and password. Invalid attempts show below.
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <form ref={formRef} action={formAction} className="space-y-4">
+      <CardContent className="space-y-4">
+        <form action={formAction} className="space-y-4">
           {!state.ok && state.formError ? (
             <p
               className="flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
@@ -86,7 +82,7 @@ export function LoginForm() {
               <span>{state.formError}</span>
             </p>
           ) : null}
-          {isDev && devError ? (
+          {isDev && !quickLoginState.ok && quickLoginState.formError ? (
             <p
               className="flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
               role="alert"
@@ -95,7 +91,7 @@ export function LoginForm() {
                 icon={faCircleExclamation}
                 className="mt-0.5 size-4 shrink-0"
               />
-              <span>{devError}</span>
+              <span>{quickLoginState.formError}</span>
             </p>
           ) : null}
           <div className="space-y-2">
@@ -146,47 +142,61 @@ export function LoginForm() {
             <FontAwesomeIcon icon={faArrowRightToBracket} className="size-4" />
             Sign in
           </SubmitButton>
-          {isDev ? (
-            <div className="space-y-2 border-t border-border pt-4">
-              <p className="text-center text-xs text-muted-foreground">
-                Development quick sign-in (same users as{" "}
-                <code className="rounded bg-muted px-1">pnpm db:seed</code>)
-              </p>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  disabled={devPending}
-                  onClick={() => quickLogin("admin")}
-                >
-                  <FontAwesomeIcon icon={faUserShield} className="size-4" />
-                  Login as admin
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  disabled={devPending}
-                  onClick={() => quickLogin("staff")}
-                >
-                  <FontAwesomeIcon icon={faUserTie} className="size-4" />
-                  Login as staff
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  disabled={devPending}
-                  onClick={() => quickLogin("student")}
-                >
-                  <FontAwesomeIcon icon={faUserGraduate} className="size-4" />
-                  Login as student
-                </Button>
+        </form>
+        {isDev ? (
+          <div className="border-t border-border pt-4">
+            <div className="rounded-lg border border-dashed border-border bg-muted/30 p-3">
+              <div className="mb-3 flex items-start gap-2">
+                <FontAwesomeIcon icon={faFlask} className="mt-0.5 size-4 text-muted-foreground" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-foreground">Development quick sign-in</p>
+                  <p className="text-xs text-muted-foreground">
+                    Uses the seeded demo users from{" "}
+                    <code className="rounded bg-muted px-1">pnpm db:seed</code>.
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-2">
+                <form action={quickLoginAction}>
+                  <input type="hidden" name="preset" value="admin" />
+                  <Button
+                    type="submit"
+                    variant="outline"
+                    className="w-full"
+                    disabled={quickLoginPending}
+                  >
+                    <FontAwesomeIcon icon={faUserShield} className="size-4" />
+                    Use admin demo
+                  </Button>
+                </form>
+                <form action={quickLoginAction}>
+                  <input type="hidden" name="preset" value="staff" />
+                  <Button
+                    type="submit"
+                    variant="outline"
+                    className="w-full"
+                    disabled={quickLoginPending}
+                  >
+                    <FontAwesomeIcon icon={faUserTie} className="size-4" />
+                    Use staff demo
+                  </Button>
+                </form>
+                <form action={quickLoginAction}>
+                  <input type="hidden" name="preset" value="student" />
+                  <Button
+                    type="submit"
+                    variant="outline"
+                    className="w-full"
+                    disabled={quickLoginPending}
+                  >
+                    <FontAwesomeIcon icon={faUserGraduate} className="size-4" />
+                    Use student demo
+                  </Button>
+                </form>
               </div>
             </div>
-          ) : null}
-        </form>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );

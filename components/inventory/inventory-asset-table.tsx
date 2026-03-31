@@ -5,6 +5,7 @@ import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faLink,
+  faImage,
   faQrcode,
   faTableColumns,
 } from "@fortawesome/free-solid-svg-icons";
@@ -29,6 +30,7 @@ import {
 } from "@/lib/inventory/inventory-table-columns";
 import type { AssetListItem } from "@/lib/types/dto";
 import { AddToCartInventoryCell } from "@/components/cart/add-to-cart-inventory-cell";
+import { AssetImage } from "@/components/inventory/asset-image";
 
 type InventoryAssetTableProps = {
   rows: AssetListItem[];
@@ -119,6 +121,16 @@ export function InventoryAssetTable({
             <tr>
               <th className="p-3 font-medium">SKU / ID</th>
               <th className="p-3 font-medium">Name</th>
+              <th className="p-3 font-medium">
+                <span className="inline-flex items-center gap-1.5">
+                  <FontAwesomeIcon
+                    icon={faImage}
+                    className="size-3.5 text-muted-foreground"
+                    aria-hidden
+                  />
+                  Photo
+                </span>
+              </th>
               {optionalVisible.category ? (
                 <th className="p-3 font-medium">Category</th>
               ) : null}
@@ -150,7 +162,7 @@ export function InventoryAssetTable({
                 <th className="p-3 font-medium">Status</th>
               ) : null}
               {canUseCart ? (
-                <th className="p-3 font-medium">Cart</th>
+                <th className="p-3 font-medium">Request list</th>
               ) : null}
             </tr>
           </thead>
@@ -169,6 +181,18 @@ export function InventoryAssetTable({
                   </Link>
                 </td>
                 <td className="p-3">{a.name}</td>
+                <td className="p-3">
+                  {a.imagePath ? (
+                    <AssetImage
+                      src={a.imagePath}
+                      alt={`Photo of ${a.name}`}
+                      sizes="64px"
+                      className="aspect-square w-16"
+                    />
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </td>
                 {optionalVisible.category ? (
                   <td className="p-3 text-muted-foreground">
                     {a.categoryName ?? "—"}

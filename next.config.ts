@@ -12,6 +12,7 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  serverExternalPackages: ["@prisma/client", "prisma"],
   experimental: {
     serverActions: {
       bodySizeLimit: "10mb",

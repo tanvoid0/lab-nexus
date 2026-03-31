@@ -24,7 +24,8 @@ import { cartSubmitSchema } from "@/lib/schemas/cart-checkout";
 import { prisma } from "@/lib/db";
 import { notDeleted } from "@/lib/prisma/active-scopes";
 import {
-  fulfillPendingCheckoutRequestLines,
+  approvePendingCheckoutRequestLines,
+  issueApprovedCheckoutRequestLines,
   rejectAllPendingLines,
   syncCheckoutRequestStatus,
 } from "@/lib/checkout/sync-checkout-request-status";
@@ -67,7 +68,7 @@ export async function submitCartCheckoutAction(
   try {
     linesRaw = JSON.parse(String(formData.get("lines") ?? "null"));
   } catch {
-    return failure({ formError: "Invalid cart payload." });
+    return failure({ formError: "Invalid request list payload." });
   }
 
   const parsed = cartSubmitSchema.safeParse({
@@ -145,12 +146,23 @@ export async function submitCartCheckoutAction(
       }
 
       if (autoFulfill) {
-        await fulfillPendingCheckoutRequestLines(tx, {
+        await approvePendingCheckoutRequestLines(tx, request.id);
+        await issueApprovedCheckoutRequestLines(tx, {
           requestId: request.id,
           borrowerUserId: session.user!.id,
           sharedPurpose: parsed.data.purpose,
           sharedDueAt: due,
           conditionOut: conditionOut ?? undefined,
+        });
+        await tx.checkoutRequest.update({
+          where: { id: request.id },
+          data: {
+            reviewerUserId: session.user.id,
+            reviewedAt: new Date(),
+            reviewNote: "Direct issue by lab staff.",
+            issuerUserId: session.user.id,
+            issuedAt: new Date(),
+          },
         });
       } else {
         await syncCheckoutRequestStatus(tx, request.id);
@@ -212,19 +224,13 @@ export async function approveCheckoutRequestAction(
 
   try {
     await prisma.$transaction(async (tx) => {
-      await fulfillPendingCheckoutRequestLines(tx, {
-        requestId: req.id,
-        borrowerUserId: req.userId,
-        sharedPurpose: req.sharedPurpose,
-        sharedDueAt: req.sharedDueAt,
-        conditionOut: req.conditionOut ?? undefined,
-      });
+      await approvePendingCheckoutRequestLines(tx, req.id);
       await tx.checkoutRequest.update({
         where: { id: req.id },
         data: {
           reviewerUserId: session.user.id,
           reviewedAt: new Date(),
-          reviewNote: "Approved — equipment assigned.",
+          reviewNote: "Approved and ready for pickup.",
         },
       });
     });
@@ -239,7 +245,68 @@ export async function approveCheckoutRequestAction(
     entityType: AuditEntityType.CheckoutRequest,
     entityId: requestId,
     action: AuditAction.UPDATE,
-    diff: { approved: true },
+    diff: { approved: true, readyForPickup: true },
+  });
+
+  revalidatePath("/requests");
+  revalidatePath(`/requests/${requestId}`);
+  revalidatePath("/admin/checkout-requests");
+  redirect("/admin/checkout-requests");
+}
+
+export async function issueCheckoutRequestAction(
+  _prev: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const session = await auth();
+  if (!session?.user?.id) return failure({ formError: "Sign in required." });
+  try {
+    assertAnyRole(session.user.roles, LAB_ROLES_STAFF);
+  } catch {
+    return failure({ formError: "Not allowed." });
+  }
+
+  const requestId = String(formData.get("requestId") ?? "").trim();
+  if (!requestId) return failure({ formError: "Missing request." });
+
+  const req = await prisma.checkoutRequest.findFirst({
+    where: { id: requestId, status: CheckoutRequestStatus.READY_FOR_PICKUP },
+    include: { lines: true },
+  });
+  if (!req) return failure({ formError: "Request is not ready for pickup." });
+  if (!req.lines.some((l) => l.status === CheckoutRequestLineStatus.APPROVED)) {
+    return failure({ formError: "Nothing is approved for pickup on this request." });
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await issueApprovedCheckoutRequestLines(tx, {
+        requestId: req.id,
+        borrowerUserId: req.userId,
+        sharedPurpose: req.sharedPurpose,
+        sharedDueAt: req.sharedDueAt,
+        conditionOut: req.conditionOut ?? undefined,
+      });
+      await tx.checkoutRequest.update({
+        where: { id: req.id },
+        data: {
+          issuerUserId: session.user.id,
+          issuedAt: new Date(),
+        },
+      });
+    });
+  } catch (e) {
+    return failure({
+      formError: e instanceof Error ? e.message : "Issuance failed.",
+    });
+  }
+
+  await writeAuditLog({
+    userId: session.user.id,
+    entityType: AuditEntityType.CheckoutRequest,
+    entityId: requestId,
+    action: AuditAction.UPDATE,
+    diff: { issued: true },
   });
 
   revalidatePath("/inventory");

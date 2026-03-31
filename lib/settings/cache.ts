@@ -39,7 +39,7 @@ export function getPrismaUserSettingsDelegate(): PrismaUserSettingsDelegate | nu
   }
   if (process.env.NODE_ENV === "development") {
     console.warn(
-      "[lab-nexus] Prisma client is missing `userSettings`. Stop the dev server, run `pnpm db:generate`, run `pnpm db:push` if you added UserSettings to the schema, then restart.",
+      "[vehicle-computing-lab] Prisma client is missing `userSettings`. Stop the dev server, run `pnpm db:generate`, run `pnpm db:push` if you added UserSettings to the schema, then restart.",
     );
   }
   return null;

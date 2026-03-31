@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import { AuditEntityType } from "@prisma/client";
 import { notFound } from "next/navigation";
@@ -40,6 +39,7 @@ import {
 import { AddToCartAssetPanel } from "@/components/cart/add-to-cart-asset-panel";
 import { checkoutBorrowerLabel } from "@/lib/checkout/borrower-display";
 import type { NextPageProps } from "@/lib/types/next-app";
+import { AssetImage } from "@/components/inventory/asset-image";
 
 export default async function AssetDetailPage({
   params,
@@ -170,15 +170,12 @@ export default async function AssetDetailPage({
       <div className="grid gap-8 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           {asset.imagePath ? (
-            <div className="relative aspect-video max-w-xl overflow-hidden rounded-lg border border-border bg-muted">
-              <Image
-                src={asset.imagePath}
-                alt=""
-                fill
-                className="object-contain"
-                sizes="(max-width: 768px) 100vw, 640px"
-              />
-            </div>
+            <AssetImage
+              src={asset.imagePath}
+              alt={`Photo of ${asset.name}`}
+              sizes="(max-width: 768px) 100vw, 640px"
+              className="aspect-video max-w-xl"
+            />
           ) : null}
 
           <Card className="border-border">

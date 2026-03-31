@@ -5,7 +5,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faBell,
   faBoxesStacked,
-  faCartShopping,
+  faClipboardCheck,
   faClipboardList,
   faDiagramProject,
   faTruckRampBox,
@@ -31,20 +31,20 @@ export function DashboardQuickLinks({
     },
     {
       href: "/cart",
-      label: "Cart",
-      description: "Queue items and submit a loan request.",
-      icon: faCartShopping,
+      label: "Request list",
+      description: "Select equipment, then submit a checkout request.",
+      icon: faClipboardCheck,
     },
     {
       href: "/requests",
-      label: "Loan requests",
-      description: "Track approvals and assignments.",
+      label: "Requests",
+      description: "Track review, pickup, and issuance.",
       icon: faTruckRampBox,
     },
     {
       href: "/checkouts",
-      label: "Checkouts",
-      description: "Active and overdue loans.",
+      label: "Issued items",
+      description: "Items currently issued or overdue.",
       icon: faClipboardList,
     },
     {

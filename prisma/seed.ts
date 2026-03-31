@@ -8,6 +8,7 @@ import {
   CheckoutRequestStatus,
   CheckoutStatus,
   PrismaClient,
+  ProjectStatus,
 } from "@prisma/client";
 import { DEFAULT_LOOKUP_ROWS } from "../lib/reference/lookup-defaults";
 import { ensureDefaultLookupEntries } from "../lib/reference/ensure-lookups";
@@ -123,14 +124,18 @@ async function ensureLocation(name: string) {
   return prisma.location.create({ data: { name } });
 }
 
-async function ensureProject(name: string, slug: string) {
+async function ensureProject(
+  name: string,
+  slug: string,
+  status: ProjectStatus = ProjectStatus.PLANNED,
+) {
   const existing = await prisma.project.findFirst({
     where: {
       AND: [{ ...notDeleted }, { OR: [{ slug }, { name }] }],
     },
   });
   if (existing) return existing;
-  return prisma.project.create({ data: { name, slug } });
+  return prisma.project.create({ data: { name, slug, status } });
 }
 
 async function ensureProjectMember(projectId: string, userId: string) {
@@ -260,14 +265,20 @@ async function main() {
   const loc314 = await ensureLocation("Room 314");
   const locBenchA = await ensureLocation("Bench A");
 
-  const projectAd = await ensureProject("Autonomous driving", "autonomous-driving");
+  const projectAd = await ensureProject(
+    "Autonomous driving",
+    "autonomous-driving",
+    ProjectStatus.IN_PROGRESS,
+  );
   const projectIndoor = await ensureProject(
     "Indoor navigation benchmark",
     "indoor-navigation-benchmark",
+    ProjectStatus.PLANNED,
   );
   await prisma.project.updateMany({
     where: { slug: "indoor-navigation-benchmark", ...notDeleted },
     data: {
+      status: ProjectStatus.PLANNED,
       description:
         "Baseline runs for wheel odometry + lidar SLAM in the mock warehouse layout. See bench booklet for marker positions.",
       webLinks: [
@@ -700,7 +711,7 @@ async function main() {
 
   const pwdHint =
     process.env.SEED_DEMO_PASSWORD?.trim() || process.env.CI === "true"
-      ? "(password from SEED_DEMO_PASSWORD, or labnexus123 when CI=true)."
+      ? "(password from SEED_DEMO_PASSWORD, or vehiclecomputinglab123 when CI=true)."
       : `(demo password in ${seedDemoCredentialsPath()} unless SEED_DEMO_PASSWORD is set).`;
   console.log(
     `Seed OK. Dev quick login or manual sign-in: ${DEMO_ADMIN_EMAIL}, ${DEMO_STAFF_EMAIL}, ${DEMO_STUDENT_EMAIL} ${pwdHint}`,
@@ -709,7 +720,7 @@ async function main() {
     `Reference data: ${lookupCount} lookup row(s) (condition + operational status); default rows maintained by ensureDefaultLookupEntries.`,
   );
   console.log(
-    `Spreadsheet inventory: ${inventoryUpserted} assets upserted (${useInventorySeedApi ? "via POST /api/dev/inventory-seed" : "in-process; same validation as that route"}). JSON items may set optional "condition" / "operationalStatus" (code or label).`,
+    `Spreadsheet inventory: ${inventoryUpserted} assets upserted (${useInventorySeedApi ? "via POST /api/dev/inventory-seed" : "in-process; same validation as that route"}). JSON items may set optional "condition" / "operationalStatus" (code or label) and "imageUrl"; synthetic rows fetch placeholder images and persist them into /uploads.`,
   );
   console.log(
     "Demo data: two projects (one with rich profile JSON), project members, optional pending student loan request when synthetic SKUs exist, LiDAR + overdue + notification, active modem checkout, returned robot loan, /admin/audit sample rows (first run only per DB).",

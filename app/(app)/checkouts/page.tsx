@@ -36,9 +36,11 @@ export default async function CheckoutsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-primary">Checkouts</h1>
+          <h1 className="text-2xl font-semibold text-primary">Issued items</h1>
           <p className="text-sm text-muted-foreground">
-            {isAdmin ? "All active and overdue loans." : "Your active and overdue loans."}
+            {isAdmin
+              ? "All items currently issued to borrowers, including overdue ones."
+              : "Items currently issued to you, including overdue ones."}
           </p>
         </div>
         {canExportCheckouts ? (

@@ -49,7 +49,7 @@ export function AdminToolbarActions({
       <Button asChild variant="secondary">
         <Link href="/admin/checkout-requests" className="gap-2">
           <FontAwesomeIcon icon={faTruckRampBox} className="size-4" />
-          Loan approvals
+          Request approvals
         </Link>
       </Button>
       <Button asChild variant="secondary">

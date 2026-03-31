@@ -4,6 +4,10 @@ import { z } from "zod";
 import { assetCreateSchema } from "@/lib/schemas/asset";
 import { inventorySeedItemSchema } from "@/lib/schemas/inventory-seed";
 import {
+  buildSyntheticSeedImageUrl,
+  persistImageFromUrl,
+} from "@/lib/assets/image-upload";
+import {
   DEFAULT_CONDITION_CODE,
   DEFAULT_OPERATIONAL_STATUS_CODE,
 } from "@/lib/reference/lookup-defaults";
@@ -98,6 +102,17 @@ export async function syncInventorySeedItemsValidated(
 
       /** Deterministic tag so MongoDB `@unique` on optional `trackTag` never sees duplicate `null`. */
       const seedTrackTag = `INV-${d.skuOrInternalId}`.slice(0, 200);
+      const existing = await prisma.asset.findUnique({
+        where: { skuOrInternalId: d.skuOrInternalId },
+        select: { imagePath: true },
+      });
+
+      let imagePath = existing?.imagePath ?? undefined;
+      if (!imagePath) {
+        const imageUrl =
+          row.imageUrl?.trim() || buildSyntheticSeedImageUrl(d.skuOrInternalId);
+        imagePath = await persistImageFromUrl(imageUrl, d.skuOrInternalId);
+      }
 
       await prisma.asset.upsert({
         where: { skuOrInternalId: d.skuOrInternalId },
@@ -110,6 +125,7 @@ export async function syncInventorySeedItemsValidated(
           quantityAvailable: qtyAvail,
           notes: d.notes?.trim() || undefined,
           quoteUrl: d.quoteUrl?.trim() || undefined,
+          imagePath,
           categoryId: d.categoryId || undefined,
           locationId: d.locationId || undefined,
           acquiredAt: d.acquiredAt ? new Date(d.acquiredAt) : undefined,
@@ -123,6 +139,7 @@ export async function syncInventorySeedItemsValidated(
           quantityAvailable: qtyAvail,
           notes: d.notes?.trim() || undefined,
           quoteUrl: d.quoteUrl?.trim() || undefined,
+          imagePath,
           categoryId: d.categoryId || undefined,
           locationId: d.locationId || undefined,
           acquiredAt: d.acquiredAt ? new Date(d.acquiredAt) : undefined,

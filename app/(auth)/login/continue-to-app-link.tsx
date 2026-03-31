@@ -10,7 +10,7 @@ export function ContinueToAppLink() {
       href="/"
       className="mt-4 inline-flex items-center gap-2 text-sm text-primary underline-offset-4 hover:underline"
     >
-      Continue to app (redirects if not signed in)
+      Browse the public portfolio
       <FontAwesomeIcon icon={faArrowRight} className="size-3.5" />
     </Link>
   );

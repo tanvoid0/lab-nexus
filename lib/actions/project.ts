@@ -62,6 +62,7 @@ export async function createProjectAction(
   const raw = {
     name: formData.get("name"),
     slug: (formData.get("slug") as string) || undefined,
+    status: formData.get("status"),
   };
   const parsed = projectCreateSchema.safeParse(raw);
   if (!parsed.success) {
@@ -80,7 +81,7 @@ export async function createProjectAction(
   let project;
   try {
     project = await prisma.project.create({
-      data: { name, slug },
+      data: { name, slug, status: parsed.data.status },
     });
   } catch (e) {
     return failure({
@@ -93,7 +94,7 @@ export async function createProjectAction(
     entityType: AuditEntityType.Project,
     entityId: project.id,
     action: AuditAction.CREATE,
-    diff: { name },
+    diff: { name, status: parsed.data.status },
   });
 
   revalidatePath("/projects");
@@ -114,6 +115,7 @@ export async function updateProjectDetailsAction(
 
   const raw = {
     projectId: formData.get("projectId"),
+    status: formData.get("status"),
     description: formData.get("description") as string | undefined,
     webLinksJson: String(formData.get("webLinksJson") ?? "[]"),
     documentLinksJson: String(formData.get("documentLinksJson") ?? "[]"),
@@ -121,6 +123,7 @@ export async function updateProjectDetailsAction(
 
   const parsed = projectUpdateDetailsSchema.safeParse({
     projectId: raw.projectId,
+    status: raw.status,
     description:
       typeof raw.description === "string" ? raw.description : undefined,
     webLinksJson: raw.webLinksJson,
@@ -156,6 +159,7 @@ export async function updateProjectDetailsAction(
       : parsed.data.description?.trim() ?? null;
 
   const before = {
+    status: project.status,
     description: project.description,
     webLinks: project.webLinks,
     documentLinks: project.documentLinks,
@@ -164,6 +168,7 @@ export async function updateProjectDetailsAction(
   await prisma.project.update({
     where: { id: project.id },
     data: {
+      status: parsed.data.status,
       description,
       webLinks,
       documentLinks,
@@ -176,6 +181,7 @@ export async function updateProjectDetailsAction(
     entityId: project.id,
     action: AuditAction.UPDATE,
     diff: {
+      status: { from: before.status, to: parsed.data.status },
       description: { from: before.description, to: description },
       webLinks: { from: before.webLinks, to: webLinks },
       documentLinks: { from: before.documentLinks, to: documentLinks },

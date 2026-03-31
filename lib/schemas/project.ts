@@ -1,3 +1,4 @@
+import { ProjectStatus } from "@prisma/client";
 import { z } from "zod";
 
 export const projectUrlEntrySchema = z.object({
@@ -12,6 +13,7 @@ export const projectUrlEntryListSchema = z
 export const projectCreateSchema = z.object({
   name: z.string().min(1, "Name is required").max(200),
   slug: z.string().max(120).optional(),
+  status: z.nativeEnum(ProjectStatus),
 });
 
 export const projectMemberAddSchema = z.object({
@@ -21,6 +23,7 @@ export const projectMemberAddSchema = z.object({
 
 export const projectUpdateDetailsSchema = z.object({
   projectId: z.string().min(1),
+  status: z.nativeEnum(ProjectStatus),
   description: z.string().max(20000).optional(),
   webLinksJson: z.string(),
   documentLinksJson: z.string(),

@@ -3,7 +3,7 @@ import type { AuditAction, AuditEntityType } from "@prisma/client";
 const ENTITY_LABEL: Record<AuditEntityType, string> = {
   Asset: "Inventory (asset)",
   Checkout: "Checkout / loan",
-  CheckoutRequest: "Loan request (cart)",
+  CheckoutRequest: "Checkout request",
   Project: "Project",
   Import: "Spreadsheet import",
   AssetCategory: "Category (reference)",

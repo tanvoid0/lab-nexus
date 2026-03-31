@@ -5,7 +5,7 @@ export type BreadcrumbItem = {
 
 const STATIC_LABELS: Record<string, string> = {
   inventory: "Inventory",
-  checkouts: "Checkouts",
+  checkouts: "Issued items",
   projects: "Projects",
   notifications: "Notifications",
   admin: "Admin",
@@ -18,9 +18,9 @@ const STATIC_LABELS: Record<string, string> = {
   analytics: "Analytics",
   "reference-data": "Reference data",
   currencies: "Lab currencies",
-  cart: "Cart",
-  requests: "Loan requests",
-  "checkout-requests": "Loan approvals",
+  cart: "Request list",
+  requests: "Requests",
+  "checkout-requests": "Request approvals",
 };
 
 function humanizeSegment(segment: string): string {

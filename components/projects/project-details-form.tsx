@@ -1,10 +1,12 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
+import { ProjectStatus } from "@prisma/client";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCirclePlus,
   faFileLines,
+  faFlagCheckered,
   faFloppyDisk,
   faLink,
   faParagraph,
@@ -13,6 +15,7 @@ import {
 import { toast } from "sonner";
 import { updateProjectDetailsAction } from "@/lib/actions/project";
 import type { ActionResult } from "@/lib/form/action-result";
+import { PROJECT_STATUS_ORDER, getProjectStatusMeta } from "@/lib/project/status";
 import type { ProjectUrlEntry } from "@/lib/schemas/project";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,6 +55,7 @@ const initialState: ActionResult<{ saved: true }> = { ok: true };
 
 export type ProjectDetailsFormProps = {
   projectId: string;
+  status: ProjectStatus;
   description: string | null;
   webLinks: ProjectUrlEntry[];
   documentLinks: ProjectUrlEntry[];
@@ -59,6 +63,7 @@ export type ProjectDetailsFormProps = {
 
 export function ProjectDetailsForm({
   projectId,
+  status,
   description,
   webLinks,
   documentLinks,
@@ -109,6 +114,32 @@ export function ProjectDetailsForm({
               {state.formError}
             </p>
           ) : null}
+
+          <div className="space-y-2">
+            <Label htmlFor="project-status" className="inline-flex items-center gap-2">
+              <FontAwesomeIcon
+                icon={faFlagCheckered}
+                className="size-3.5 text-muted-foreground"
+              />
+              Status
+            </Label>
+            <select
+              id="project-status"
+              name="status"
+              defaultValue={status}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+            >
+              {PROJECT_STATUS_ORDER.map((value) => (
+                <option key={value} value={value}>
+                  {getProjectStatusMeta(value).label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Keep the project board current as work moves from planning to completion.
+            </p>
+            <FieldError errors={state.ok ? undefined : state.fieldErrors?.status} />
+          </div>
 
           <div className="space-y-2">
             <Label htmlFor="project-description">Description</Label>
@@ -212,7 +243,7 @@ export function ProjectDetailsForm({
             </div>
             <p className="text-xs text-muted-foreground">
               Point to hosted files (SharePoint, Drive, etc.); uploads are not
-              stored in Lab Nexus yet.
+              stored in Vehicle Computing Lab yet.
             </p>
             <div className="space-y-2">
               {docRows.map((row, i) => (

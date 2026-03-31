@@ -62,7 +62,7 @@ export function AuditTrailFilters(props: {
             >
               <option value="">Any flow</option>
               <option value="Inventory">Inventory</option>
-              <option value="Lending">Lending (checkouts & cart)</option>
+              <option value="Lending">Lending (checkouts & requests)</option>
               <option value="Projects">Projects</option>
               <option value="Import">Import</option>
               <option value="Reference data">Reference data</option>

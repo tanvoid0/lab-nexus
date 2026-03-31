@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { InventorySeedFile, InventorySeedItem } from "@/lib/schemas/inventory-seed";
+import { buildSyntheticSeedImageUrl } from "@/lib/assets/image-upload";
 
 const CATEGORIES = [
   "Robotics",
@@ -114,6 +115,7 @@ export function buildSyntheticInventorySeed(
             ? "Label outer bin; spare cables in nested tray."
             : undefined,
       quoteUrl: idx % 7 === 0 ? "https://example.com/product-placeholder" : undefined,
+      imageUrl: buildSyntheticSeedImageUrl(`${sku}-${Math.floor(rng() * 10_000)}`),
     };
 
     if (idx % 6 !== 1) {

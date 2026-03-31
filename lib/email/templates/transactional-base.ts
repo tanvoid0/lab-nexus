@@ -43,10 +43,10 @@ export function renderTransactionalEmailHtml(opts: {
           <tr>
             <td style="background-color:${t.primary};padding:20px 24px;">
               <p style="margin:0;font-size:18px;font-weight:600;color:${t.primaryForeground};letter-spacing:-0.02em;">
-                Lab Nexus
+                Vehicle Computing Lab
               </p>
               <p style="margin:6px 0 0;font-size:13px;color:${t.primaryForeground};opacity:0.9;">
-                Vehicle Computing Lab
+                Equipment inventory and checkout
               </p>
             </td>
           </tr>
@@ -59,7 +59,7 @@ export function renderTransactionalEmailHtml(opts: {
           <tr>
             <td style="padding:16px 24px 24px;border-top:1px solid ${t.border};background-color:${t.muted};">
               <p style="margin:0;font-size:12px;line-height:1.5;color:${t.mutedForeground};">
-                Lab Nexus — Vehicle Computing Lab
+                Vehicle Computing Lab
               </p>
             </td>
           </tr>

@@ -1,10 +1,13 @@
-import type { Project } from "@prisma/client";
+import type { Project, ProjectStatus } from "@prisma/client";
 import { normalizeUrlEntries } from "@/lib/project/normalize-url-entries";
+import { getProjectStatusMeta } from "@/lib/project/status";
 
 export type ProjectListRowModel = {
   id: string;
   name: string;
   slug: string | null;
+  status: ProjectStatus;
+  statusLabel: string;
   descriptionPreview: string | null;
   memberCount: number;
   assetCount: number;
@@ -13,7 +16,7 @@ export type ProjectListRowModel = {
 
 type ProjectWithCounts = Pick<
   Project,
-  "id" | "name" | "slug" | "description" | "webLinks" | "documentLinks"
+  "id" | "name" | "slug" | "status" | "description" | "webLinks" | "documentLinks"
 > & {
   _count: { members: number; assets: number };
 };
@@ -28,10 +31,13 @@ function excerpt(text: string | null, maxLen: number): string | null {
 export function toProjectListRow(p: ProjectWithCounts): ProjectListRowModel {
   const web = normalizeUrlEntries(p.webLinks);
   const docs = normalizeUrlEntries(p.documentLinks);
+  const statusMeta = getProjectStatusMeta(p.status);
   return {
     id: p.id,
     name: p.name,
     slug: p.slug,
+    status: p.status,
+    statusLabel: statusMeta.label,
     descriptionPreview: excerpt(p.description, 160),
     memberCount: p._count.members,
     assetCount: p._count.assets,

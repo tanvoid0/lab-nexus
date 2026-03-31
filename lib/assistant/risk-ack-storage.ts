@@ -1,5 +1,5 @@
 /** Per-user browser flag: user accepted experimental-assistant notice. Bump version if notice text materially changes. */
-const PREFIX = "lab-nexus:assistant:risk-ack:v1:";
+const PREFIX = "vehicle-computing-lab:assistant:risk-ack:v1:";
 
 export function riskAckStorageKey(userId: string) {
   return `${PREFIX}${userId}`;

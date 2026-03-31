@@ -7,9 +7,9 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faAlignLeft,
   faCalendarDays,
-  faCartShopping,
   faClipboardCheck,
   faFolderOpen,
+  faListCheck,
   faTrash,
 } from "@fortawesome/free-solid-svg-icons";
 import { submitCartCheckoutAction } from "@/lib/actions/checkout-request";
@@ -59,13 +59,13 @@ export function CartCheckoutForm({
     return (
       <Card className="border-border">
         <CardHeader>
-          <CardTitle className="text-primary">Your cart is empty</CardTitle>
+          <CardTitle className="text-primary">No items selected</CardTitle>
           <CardDescription>
             Add available items from{" "}
             <Link href="/inventory" className="text-primary underline-offset-4 hover:underline">
               inventory
             </Link>{" "}
-            or filter inventory by project if you use projects.
+            to build your request list.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -85,10 +85,10 @@ export function CartCheckoutForm({
       <Card className="border-border">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-primary">
-            <FontAwesomeIcon icon={faCartShopping} className="size-5" />
-            Cart ({lines.length})
+            <FontAwesomeIcon icon={faListCheck} className="size-5" />
+            Request list ({lines.length})
           </CardTitle>
-          <CardDescription>Remove anything you do not want before submitting.</CardDescription>
+          <CardDescription>Review the selected equipment before submitting your request.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {lines.map((l) => (
@@ -108,7 +108,7 @@ export function CartCheckoutForm({
                 variant="outline"
                 size="icon"
                 className="shrink-0"
-                aria-label={`Remove ${l.name} from cart`}
+                aria-label={`Remove ${l.name} from request list`}
                 onClick={() => removeLine(l.assetId, l.assetUnitId)}
               >
                 <FontAwesomeIcon icon={faTrash} className="size-4" />
@@ -122,8 +122,8 @@ export function CartCheckoutForm({
         <CardHeader>
           <CardTitle className="text-lg text-primary">Checkout</CardTitle>
           <CardDescription>
-            Researchers and admins are assigned equipment immediately. Students submit a request for
-            staff approval.
+            Staff can issue equipment immediately. Student requests move through review first, then
+            pickup and issuance.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -140,7 +140,8 @@ export function CartCheckoutForm({
                 Optional: link to a lab project
               </summary>
               <p className="mt-2 text-xs text-muted-foreground">
-                Leave everything here unset if you are not allocating this loan to a project. When set, it is stored on the checkout for filtering and exports.
+                Leave everything here unset if you are not allocating this request to a project.
+                When set, it is stored on the issued checkout for filtering and exports.
               </p>
               <div className="mt-3 space-y-2">
                 <Label htmlFor="defaultProjectId" className="inline-flex items-center gap-2 text-xs">
@@ -235,8 +236,8 @@ export function CartCheckoutForm({
               <Textarea id="conditionNote" name="conditionNote" rows={2} />
             </div>
             <SubmitButton pendingLabel="Submitting…" className="gap-2">
-              <FontAwesomeIcon icon={faCartShopping} className="size-4" />
-              Submit loan request
+              <FontAwesomeIcon icon={faListCheck} className="size-4" />
+              Submit request
             </SubmitButton>
           </form>
         </CardContent>

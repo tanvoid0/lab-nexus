@@ -1,9 +1,9 @@
-# Lab Nexus — MongoDB replica set + optional full stack (Next.js in Docker).
+# Vehicle Computing Lab — MongoDB replica set + optional full stack (Next.js in Docker).
 #
 # Mongo only (app on host with pnpm dev): start just Mongo, then rs.initiate for localhost:
 #   docker compose up -d mongo
-#   docker exec -it lab-nexus-mongo mongosh --eval "rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'localhost:27017' }] })"
-#   # DATABASE_URL in .env → mongodb://127.0.0.1:27017/lab-nexus?replicaSet=rs0
+#   docker exec -it vehicle-computing-lab-mongo mongosh --eval "rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'localhost:27017' }] })"
+#   # DATABASE_URL in .env → mongodb://127.0.0.1:27017/vehicle-computing-lab?replicaSet=rs0
 #
 # If host ports are busy: LAB_NEXUS_MONGO_HOST_PORT=27018 LAB_NEXUS_APP_HOST_PORT=3001 docker compose ...
 #
@@ -11,8 +11,8 @@
 #   cp .env.example .env   # set AUTH_SECRET, CRON_SECRET, etc.
 #   docker compose --profile full up -d --build
 #   First-time DB: the app image has no Prisma CLI; from repo on host (Mongo URL = published port):
-#     DATABASE_URL="mongodb://127.0.0.1:${LAB_NEXUS_MONGO_HOST_PORT:-27017}/lab-nexus?replicaSet=rs0&directConnection=true" pnpm exec prisma db push
-#     DATABASE_URL="mongodb://127.0.0.1:${LAB_NEXUS_MONGO_HOST_PORT:-27017}/lab-nexus?replicaSet=rs0&directConnection=true" pnpm exec tsx prisma/seed.ts
+#     DATABASE_URL="mongodb://127.0.0.1:${LAB_NEXUS_MONGO_HOST_PORT:-27017}/vehicle-computing-lab?replicaSet=rs0&directConnection=true" pnpm exec prisma db push
+#     DATABASE_URL="mongodb://127.0.0.1:${LAB_NEXUS_MONGO_HOST_PORT:-27017}/vehicle-computing-lab?replicaSet=rs0&directConnection=true" pnpm exec tsx prisma/seed.ts
 #   open http://localhost:${LAB_NEXUS_APP_HOST_PORT:-3000}
 #
 # If you switch between "mongo-only" and "full stack" on the same volume, reset Mongo data if replica set errors appear:
@@ -21,12 +21,12 @@
 services:
   mongo:
     image: mongo:7
-    container_name: lab-nexus-mongo
+    container_name: vehicle-computing-lab-mongo
     ports:
       - "${LAB_NEXUS_MONGO_HOST_PORT:-27017}:27017"
     command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
     volumes:
-      - lab-nexus-mongo-data:/data/db
+      - vehicle-computing-lab-mongo-data:/data/db
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
       interval: 2s
@@ -53,12 +53,12 @@ services:
     build:
       context: .
       target: builder
-    container_name: lab-nexus-seed
+    container_name: vehicle-computing-lab-seed
     env_file:
       - .env
     environment:
       # Override host-oriented DATABASE_URL so the seed container reaches the mongo service.
-      DATABASE_URL: mongodb://mongo:27017/lab-nexus?replicaSet=rs0&directConnection=true
+      DATABASE_URL: mongodb://mongo:27017/vehicle-computing-lab?replicaSet=rs0&directConnection=true
       # Use fixed demo password so app + tests stay consistent across container rebuilds.
       CI: "true"
       # Seed scripts refuse NODE_ENV=production.
@@ -73,14 +73,14 @@ services:
   app:
     profiles: [full]
     build: .
-    container_name: lab-nexus-app
+    container_name: vehicle-computing-lab-app
     ports:
       - "${LAB_NEXUS_APP_HOST_PORT:-3000}:3000"
     env_file:
       - .env
     environment:
       # Override host-oriented DATABASE_URL so the container reaches the mongo service.
-      DATABASE_URL: mongodb://mongo:27017/lab-nexus?replicaSet=rs0&directConnection=true
+      DATABASE_URL: mongodb://mongo:27017/vehicle-computing-lab?replicaSet=rs0&directConnection=true
       # Keep dev quick-login/password consistent with the seed gate.
       CI: "true"
     depends_on:
@@ -102,4 +102,4 @@ services:
       start_period: 40s
 
 volumes:
-  lab-nexus-mongo-data:
+  vehicle-computing-lab-mongo-data:

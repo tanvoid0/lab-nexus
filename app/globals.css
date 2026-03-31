@@ -1,26 +1,26 @@
 @import "tailwindcss";
 
-/* Vehicle Computing Lab — primary green #144733, white surfaces, bronze accent #8B7355 */
+/* Nur-inspired theme: emerald primary, slate surfaces, warm gold accent. */
 :root {
-  --background: #ffffff;
-  --foreground: #1a1a1a;
+  --background: #f8fafc;
+  --foreground: #0f172a;
   --card: #ffffff;
-  --card-foreground: #1a1a1a;
+  --card-foreground: #0f172a;
   --popover: #ffffff;
-  --popover-foreground: #1a1a1a;
-  --primary: #144733;
+  --popover-foreground: #0f172a;
+  --primary: #059669;
   --primary-foreground: #ffffff;
-  --secondary: #f7f9f8;
-  --secondary-foreground: #0f3d2e;
-  --muted: #f0f4f2;
-  --muted-foreground: #4a5c55;
-  --accent: #8b7355;
-  --accent-foreground: #ffffff;
+  --secondary: #ecfdf5;
+  --secondary-foreground: #065f46;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #fbbf24;
+  --accent-foreground: #3f2a00;
   --destructive: #b91c1c;
   --destructive-foreground: #ffffff;
-  --border: #d4e0db;
-  --input: #d4e0db;
-  --ring: #144733;
+  --border: #dbe4ee;
+  --input: #dbe4ee;
+  --ring: #059669;
   --radius: 0.5rem;
 }
 
@@ -57,27 +57,27 @@ body {
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
 
-/* Dark mode — keep VCL green primary; soften surfaces */
+/* Dark mode keeps the emerald brand with slate-based surfaces. */
 .dark {
-  --background: #0f1412;
-  --foreground: #e8eeeb;
-  --card: #161d1a;
-  --card-foreground: #e8eeeb;
-  --popover: #161d1a;
-  --popover-foreground: #e8eeeb;
-  --primary: #1f5c45;
-  --primary-foreground: #f2f7f5;
-  --secondary: #1a2420;
-  --secondary-foreground: #c5d4cd;
-  --muted: #1f2a25;
-  --muted-foreground: #8fa399;
-  --accent: #9c8264;
-  --accent-foreground: #faf8f5;
+  --background: #020617;
+  --foreground: #f1f5f9;
+  --card: #0f172a;
+  --card-foreground: #f1f5f9;
+  --popover: #0f172a;
+  --popover-foreground: #f1f5f9;
+  --primary: #059669;
+  --primary-foreground: #052e26;
+  --secondary: #064e3b;
+  --secondary-foreground: #d1fae5;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --accent: #fbbf24;
+  --accent-foreground: #1f1300;
   --destructive: #e85d5d;
   --destructive-foreground: #1a0505;
-  --border: #2a3832;
-  --input: #2a3832;
-  --ring: #3d8f6c;
+  --border: #334155;
+  --input: #334155;
+  --ring: #10b981;
 }
 
 /* Compact tables / dense lists */

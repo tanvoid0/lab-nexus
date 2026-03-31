@@ -61,7 +61,7 @@ export async function GET() {
   return new NextResponse(body, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": 'attachment; filename="lab-nexus-checkouts.csv"',
+      "Content-Disposition": 'attachment; filename="vehicle-computing-lab-checkouts.csv"',
     },
   });
 }

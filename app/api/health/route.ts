@@ -18,7 +18,7 @@ export async function GET(req: Request) {
 
   return NextResponse.json({
     ok: true,
-    service: "lab-nexus",
+    service: "vehicle-computing-lab",
     ts: new Date().toISOString(),
     ...assistantHealthStatus(),
   });

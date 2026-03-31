@@ -1,6 +1,6 @@
 import type { DensityPreference } from "@/lib/settings/types";
 
-export const DENSITY_STORAGE_KEY = "lab-nexus-density";
+export const DENSITY_STORAGE_KEY = "vehicle-computing-lab-density";
 
 export type { DensityPreference };
 

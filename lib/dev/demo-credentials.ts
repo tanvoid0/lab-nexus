@@ -55,7 +55,7 @@ export function prepareDemoPasswordForSeed(): string {
   if (fromEnv) return fromEnv;
 
   if (process.env.CI === "true") {
-    return "labnexus123";
+    return "vehiclecomputinglab123";
   }
 
   const existing = tryReadFile();
@@ -74,12 +74,12 @@ export function getDemoPasswordPlain(): string {
   if (fromEnv) return fromEnv;
 
   if (process.env.CI === "true") {
-    return "labnexus123";
+    return "vehiclecomputinglab123";
   }
 
   const fromFile = tryReadFile();
   if (fromFile) return fromFile.passwordPlain;
 
   // No seed yet (or legacy DB): documented default only applies if the DB was seeded with it.
-  return "labnexus123";
+  return "vehiclecomputinglab123";
 }

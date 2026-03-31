@@ -15,12 +15,11 @@ import {
   LookupValidationError,
   requireActiveLookupCode,
 } from "@/lib/reference/lookup-validation";
+import { ensureDefaultLookupEntries } from "@/lib/reference/ensure-lookups";
 import { prisma } from "@/lib/db";
 import { notDeleted } from "@/lib/prisma/active-scopes";
 import { appendArchivedSuffix } from "@/lib/soft-delete/archive-keys";
-import { randomBytes } from "crypto";
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
+import { persistUploadedImage } from "@/lib/assets/image-upload";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -33,22 +32,15 @@ function parseSpecs(raw: string | undefined): object | undefined {
   }
 }
 
-async function saveUpload(file: File | null): Promise<string | undefined> {
-  if (!file || file.size === 0) return undefined;
-  const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-  if (!allowed.includes(file.type)) {
-    throw new Error("Invalid image type");
+function lookupErrorToActionFailure(error: unknown): ActionResult {
+  const msg = error instanceof LookupValidationError ? error.message : "Invalid lookup value.";
+  if (msg.includes("asset condition")) {
+    return failure({ fieldErrors: { conditionCode: [msg] } });
   }
-  if (file.size > 5 * 1024 * 1024) {
-    throw new Error("Image too large (max 5MB)");
+  if (msg.includes("asset operational status")) {
+    return failure({ fieldErrors: { operationalStatusCode: [msg] } });
   }
-  const ext = file.name.split(".").pop()?.toLowerCase() || "bin";
-  const name = `${Date.now()}-${randomBytes(8).toString("hex")}.${ext}`;
-  const dir = path.join(process.cwd(), "public", "uploads");
-  await mkdir(dir, { recursive: true });
-  const buf = Buffer.from(await file.arrayBuffer());
-  await writeFile(path.join(dir, name), buf);
-  return `/uploads/${name}`;
+  return failure({ formError: msg });
 }
 
 export async function createAssetAction(
@@ -66,10 +58,12 @@ export async function createAssetAction(
   const file = formData.get("image") as File | null;
   let imagePath: string | undefined;
   try {
-    imagePath = await saveUpload(file);
+    imagePath = await persistUploadedImage(file);
   } catch (e) {
     return failure({
-      formError: e instanceof Error ? e.message : "Image upload failed.",
+      fieldErrors: {
+        image: [e instanceof Error ? e.message : "Image upload failed."],
+      },
     });
   }
 
@@ -111,6 +105,7 @@ export async function createAssetAction(
 
   const d = parsed.data;
   try {
+    await ensureDefaultLookupEntries(prisma);
     await requireActiveLookupCode(prisma, "ASSET_CONDITION", d.conditionCode);
     await requireActiveLookupCode(
       prisma,
@@ -118,8 +113,7 @@ export async function createAssetAction(
       d.operationalStatusCode,
     );
   } catch (e) {
-    const msg = e instanceof LookupValidationError ? e.message : "Invalid lookup value.";
-    return failure({ formError: msg });
+    return lookupErrorToActionFailure(e);
   }
 
   const qtyAvail =
@@ -206,11 +200,13 @@ export async function updateAssetAction(
   const file = formData.get("image") as File | null;
   let imagePath: string | undefined;
   try {
-    const up = await saveUpload(file);
+    const up = await persistUploadedImage(file);
     if (up) imagePath = up;
   } catch (e) {
     return failure({
-      formError: e instanceof Error ? e.message : "Image upload failed.",
+      fieldErrors: {
+        image: [e instanceof Error ? e.message : "Image upload failed."],
+      },
     });
   }
 
@@ -253,6 +249,7 @@ export async function updateAssetAction(
 
   const d = parsed.data;
   try {
+    await ensureDefaultLookupEntries(prisma);
     await requireActiveLookupCode(prisma, "ASSET_CONDITION", d.conditionCode);
     await requireActiveLookupCode(
       prisma,
@@ -260,8 +257,7 @@ export async function updateAssetAction(
       d.operationalStatusCode,
     );
   } catch (e) {
-    const msg = e instanceof LookupValidationError ? e.message : "Invalid lookup value.";
-    return failure({ formError: msg });
+    return lookupErrorToActionFailure(e);
   }
 
   const existing = await prisma.asset.findFirst({

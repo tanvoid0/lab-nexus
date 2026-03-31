@@ -1,5 +1,5 @@
 /**
- * Lab Nexus RBAC — **multi-role** model
+ * Vehicle Computing Lab RBAC — **multi-role** model
  *
  * - Canonical roles are stored on `User.roles: string[]` in MongoDB (Prisma).
  * - Auth.js exposes them on `session.user.roles` (JWT session). **Never** trust a

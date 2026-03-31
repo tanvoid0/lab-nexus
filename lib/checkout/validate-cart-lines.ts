@@ -7,12 +7,12 @@ type Db = Prisma.TransactionClient | typeof prisma;
 export type CartLineForValidation = {
   assetId: string;
   assetUnitId?: string | null;
-  /** Effective project (line override or cart default). */
+  /** Effective project (line override or request-list default). */
   projectId?: string | null;
 };
 
 /**
- * Ensures every cart line could be checked out at submit time (stock, units).
+ * Ensures every request-list line could be checked out at submit time (stock, units).
  * If a project id is present, verifies it still exists.
  */
 export async function describeCartLinesBlocker(
@@ -36,7 +36,7 @@ export async function describeCartLinesBlocker(
         },
       },
     });
-    if (!asset) return "An item in your cart was removed from inventory.";
+    if (!asset) return "An item in your request list was removed from inventory.";
     if (asset.operationalStatusCode !== "AVAILABLE") {
       return `${asset.name} is not available for checkout.`;
     }

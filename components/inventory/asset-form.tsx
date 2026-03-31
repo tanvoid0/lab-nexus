@@ -32,6 +32,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { AssetImage } from "@/components/inventory/asset-image";
 import { nativeSelectClassName } from "@/lib/form/native-field-classes";
 
 const initial: ActionResult = { ok: true };
@@ -176,6 +177,7 @@ export function AssetForm({
                   </option>
                 ))}
               </select>
+              <FieldError errors={state.ok ? undefined : state.fieldErrors?.conditionCode} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="operationalStatusCode">Operational status</Label>
@@ -191,6 +193,9 @@ export function AssetForm({
                   </option>
                 ))}
               </select>
+              <FieldError
+                errors={state.ok ? undefined : state.fieldErrors?.operationalStatusCode}
+              />
             </div>
           </div>
 
@@ -347,7 +352,21 @@ export function AssetForm({
               <FontAwesomeIcon icon={faCamera} className="size-3.5 text-muted-foreground" />
               Photo
             </Label>
+            {asset?.imagePath ? (
+              <div className="space-y-2">
+                <AssetImage
+                  src={asset.imagePath}
+                  alt={`Current photo of ${asset.name}`}
+                  sizes="(max-width: 768px) 100vw, 320px"
+                  className="aspect-video max-w-sm"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Current image shown above. Upload a new file to replace it.
+                </p>
+              </div>
+            ) : null}
             <Input id="image" name="image" type="file" accept="image/*" />
+            <FieldError errors={state.ok ? undefined : state.fieldErrors?.image} />
           </div>
 
           <div className="flex gap-2">

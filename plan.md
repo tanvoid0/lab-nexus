@@ -1,6 +1,6 @@
-# Lab Nexus — engineering plan
+# Vehicle Computing Lab — engineering plan
 
-**Last updated:** 2026-03-29  
+**Last updated:** 2026-04-01  
 
 This file tracks **what shipped**, **work in progress**, and **intended future work**. For setup, env vars, and commands, use [`README.md`](./README.md).
 
@@ -16,16 +16,18 @@ High-level themes; details stay in code and `README.md`.
 |------|--------|
 | Inventory CRUD, filters (category, location, **assigned project**, condition code, operational status code), search (name, SKU, **track tag**); labels from **LookupEntry**; **optional columns** (incl. **Project**; client `localStorage`) + **copy view link** (current query string) on the list | Done |
 | Asset detail: image, audit trail; **admin “delete” archives** the asset (soft `deletedAt`, SKU/track tag suffixed, units archived); lists/scan/export omit archived rows | Done |
-| Check-out / check-in, expected return, quantity + **AssetUnit** when units exist; **purpose** on checkout / cart request is **optional** (still supported when provided) | Done |
-| **Borrow cart** (`/cart`): `CartProvider` + **`UserCart`** (DB JSON lines + default project, debounced `syncUserCartAction`; cleared after successful cart submit); **CheckoutRequest** + **CheckoutRequestLine** (see **`prisma/schema.prisma`**, **`prisma/clear-database.ts`**); **STUDENT** → staff approval; **RESEARCHER** / **ADMIN** auto-create **Checkout**; default + per-line **Project**; tracking **`/requests`** & **`/requests/[id]`**; **Admin → Loan approvals** (`/admin/checkout-requests`, toolbar + client queue actions); **shell nav Cart** (badge) + home **dashboard** shortcuts; inventory + project tables + asset detail **Add to cart**; **`lib/checkout/create-single-checkout.ts`**, **`lib/checkout/validate-cart-lines.ts`**; audit **`CheckoutRequest`** entity (**§1** Lending flow filter) | Done |
+| Check-out / check-in, expected return, quantity + **AssetUnit** when units exist; **purpose** on checkout / request is **optional** (still supported when provided) | Done |
+| **Request list** (`/cart` route label): `CartProvider` + **`UserCart`** draft persistence (DB JSON lines + default project, debounced `syncUserCartAction`; cleared after submit); inventory + project tables + asset detail add-to-list actions; **CheckoutRequest** + **CheckoutRequestLine** with **pending review → ready for pickup → issued / rejected** lifecycle; **STUDENT** requests wait in **Admin → Request approvals** (`/admin/checkout-requests`), while **RESEARCHER** / **ADMIN** can submit and issue immediately; tracking on **`/requests`** & **`/requests/[id]`**; default + per-line **Project**; audit **`CheckoutRequest`** entity (**§1** Lending flow filter) | Done |
 | Checkouts list (scoped by role), return flow | Done |
-| Projects + **ProjectMember** (create project, add/remove by email); **project profile** (description, web links, document URLs — stored as JSON, validated URLs); **Asset.projectId** allocation; project detail shows **assigned inventory** + link to inventory filtered by project; inventory **CSV export** includes project name | Done |
+| Projects + **ProjectMember** (create project, add/remove by email); **project profile** (description, web links, document URLs — stored as JSON, validated URLs); fixed **project status** workflow (`PLANNED`, `IN_PROGRESS`, `ON_HOLD`, `DONE`) with **grid** and **board/Jira-style** project views; **Asset.projectId** allocation; project detail shows **assigned inventory** + link to inventory filtered by project; inventory **CSV export** includes project name | Done |
 | Admin dashboard: KPIs, overdue list; **Lab accounts** (`/admin/users`, ADMIN toolbar): deactivate/restore users via **`User.deletedAt`** (no hard delete; sign-in blocked for deactivated); audit **User** entity + **Accounts** flow filter | Done |
 | **Lab currencies** (`/settings/currencies`, ADMIN; entry from **Settings**): singleton `LabCurrencyConfig` — **functional (base)** ISO 4217 currency + **additional transaction** codes; `getCachedLabCurrencyConfig()`, `isAllowedTransactionCurrency()`, `formatMonetaryAmount()` in `lib/currency/` for procurement integration; optional `LAB_FUNCTIONAL_CURRENCY` bootstrap; `/admin/currency` redirects | Done |
 | **Reference data** (`/admin/reference-data`, ADMIN): categories/locations/lookup **archive** on delete (soft `deletedAt`, unique name/code suffixed); active-only rows in pickers and lookup validation | Done |
 | Spreadsheet import (heuristic mapping), **Preview import** dry-run (row-level outcomes, no writes), column-alias docs on `/admin/import`; inventory + **checkout CSV export** | Done |
 | **Reusable QR + scan primitives** (`lib/qr/*`: PNG buffer, `/api/qr` href, `absoluteUrlForAppPath`; `lib/scan/*`: path-segment decoding, `resolveInventoryTrackTagScan`) + **`/scan/[...tag]`** inventory track tags (asset + unit); unit tags redirect with **`?unit=`** when unique; asset detail **Scan &amp; QR** shows one QR with a **scan-target** dropdown when multiple distinct tags exist (`lib/inventory/scan-qr-choices.ts`) | Done |
-| VCL branding & app chrome (tokens, logo, shell; desktop sticky bar: breadcrumbs, theme cycle, account menu) | Done |
+| Vehicle Computing Lab branding & app chrome (tokens, logo, shell; desktop sticky bar: breadcrumbs, theme cycle, account menu) | Done |
+| Project rename to **Vehicle Computing Lab** across the app, docs, email templates, exports, and local project identifiers | Done |
+| **Public portfolio homepage** at `/`: demo-focused root landing page with featured projects, public inventory highlights, and public detail pages under `/portfolio/*`; authenticated app dashboard moved to `/dashboard`, while request actions continue through `/login` | Done |
 
 ### Notifications & overdue
 
@@ -51,6 +53,7 @@ High-level themes; details stay in code and `README.md`.
 | Admin **Analytics** page (30-day checkouts, by category, top borrowers, by status); charts via **Recharts** (bar, donut, pie, horizontal bar) themed from CSS variables; **Dashboard** (ADMIN/RESEARCHER) embeds checkout **status donut** + **7-day checkout bar** with link to full analytics; pie/legend layout avoids overlapping labels | Done |
 | **Prisma CLI**: `prisma.config.ts` for seed (no deprecated `package.json#prisma`); `import "dotenv/config"` so `DATABASE_URL` resolves when the CLI skips auto `.env` | Done |
 | **Public-clone hygiene**: `.gitignore` allows committing `.env.example` while ignoring `.env`; seed upserts **synthetic** bulk inventory (richer categories/locations, **condition / operational status** mix, **42** default rows unless `INVENTORY_SEED_ITEM_COUNT` / JSON file) unless `prisma/data/inventory-seed.json` / `INVENTORY_SEED_JSON` is provided; **second demo project** (profile fields) + optional **pending checkout request** when `SYN-INV-*` rows exist; first local seed can persist a **random** demo password to gitignored `prisma/.seed-demo-credentials.json` (set `SEED_DEMO_PASSWORD` when you need a known value, e.g. for E2E) | Done |
+| **Seed/media hygiene**: default lookup reseed now reactivates archived/inactive system codes like `UNKNOWN`, and synthetic inventory seed rows fetch placeholder images from fake remote URLs then persist them into the usual local `/uploads/*` asset image path during inventory upsert | Done |
 | **Modular UI / lib**: shared `components/form/field-error`, `lib/reference/merge-lookup-options`, `lib/audit/entity-href`, `actionFailureMessage()` in `lib/form/action-result`; admin **audit trail** split into `audit-trail-filters` / `audit-trail-table` (barrel `audit-trail.tsx`); **reference data** under `components/admin/reference-data/` with barrel import | Done |
 
 ---
@@ -59,7 +62,7 @@ High-level themes; details stay in code and `README.md`.
 
 | Item | Owner / branch | Notes |
 |------|----------------|-------|
-| *— none tracked here —* | — | Update this table when you start a feature (e.g. `feat/oidc`). Remove rows when merged. |
+| Responsive page width pass | agent / current branch | Widen shared app-shell and public detail containers so desktop and ultrawide screens use available space without making cards and forms feel stretched. |
 
 *Convention:* keep WIP small—one row per active effort. Move completed rows to **§1** and shrink the diff in PR descriptions.
 
@@ -88,7 +91,7 @@ Concrete backlog items below (import UX, mobile scan-first, **QR batch/group lab
 
 **Goal:** let the lab adjust *who can do what* without rewriting the app for every policy tweak, **without** building a full ITSM-style permission matrix in the database.
 
-| Approach | Fit for Lab Nexus | Notes |
+| Approach | Fit for Vehicle Computing Lab | Notes |
 |----------|-------------------|--------|
 | **Named roles only** (`User.roles[]` — extend with e.g. `LAB_MANAGER` when needed) | **Best default** | Roles are **defined in code** (`lib/auth/roles.ts`, `hasRole` / `hasAnyRole` / `assertAnyRole` on every server action + API route). **Admin UI** only **assigns** roles from a **fixed catalog** (dropdown/checklist). Cheap to audit and test. |
 | **Capability bundles (optional add-on)** | Good when 3–4 roles are too coarse | Add a **closed list** of strings, e.g. `inventory:mutate`, `reference:write`, `export:data`, stored on `User` or derived from role in code. UI toggles **only** those predefined capabilities; enforcement still **maps capabilities → checks in TypeScript** (single source of truth). Not a free-form “entity × action” grid. |
@@ -110,13 +113,13 @@ These are *hypotheses*—validate with real lab policy before designing schema o
 |--------|---------------------------|---------------------------|
 | **Self-service signup** | Gate who gets an account | Already listed under **Longer term**; natural fit for a queue |
 | **Bulk import (apply)** | Prevent bad or malicious mass changes | Import UX backlog (preview/dry-run); approval could sit *after* dry-run |
-| **Checkout** (selected assets, long duration, or “restricted” category) | High-value or sensitive gear | **Shipped:** **borrow cart** + **CheckoutRequest** for **STUDENT** (staff queue **`/admin/checkout-requests`**); instant checkout for **RESEARCHER**/**ADMIN** — see **§1**. **Still backlog / policy:** category or duration gates, approver notifications, org-wide toggles (env or future **LabSettings**). |
+| **Checkout** (selected assets, long duration, or “restricted” category) | High-value or sensitive gear | **Shipped:** request-list based **CheckoutRequest** flow for **STUDENT** with staff review and pickup/issuance queue in **`/admin/checkout-requests`**; direct staff issue for **RESEARCHER**/**ADMIN** — see **§1**. **Still backlog / policy:** category or duration gates, approver notifications, org-wide toggles (env or future **LabSettings**). |
 | **Reservations / holds** | Competing demand for scarce items | Backlog item; approval could resolve conflicts |
 | **Asset lifecycle** (create, retire, delete) | Irreversible or audit-sensitive | Today: RBAC; optional **second pair of eyes** for delete/retire |
 | **Procurement / invoices** | Financial evidence | Medium-term backlog; finance may want sign-off on amounts or attachments |
 | **Project membership / invites** | Access to project-scoped resources | Today: admin/researcher adds members; could add **invite + accept** or **PI approves** |
 
-*Student **borrow-cart** submissions already use **CheckoutRequest** + **Loan approvals** (see **§1**). Other rows in the table remain future unless shipped there; a generic cross-cutting “approval engine” is still optional.*
+*Student equipment requests already use **CheckoutRequest** plus staff review / pickup approval (see **§1**). Other rows in the table remain future unless shipped there; a generic cross-cutting “approval engine” is still optional.*
 
 #### Policy mechanisms (mix and match per workflow)
 
@@ -179,7 +182,7 @@ Sketch only—no schema yet:
 
 1. **Document skeleton:** HTML5 doctype, `lang`, UTF-8 meta, **hidden preheader** text (first line in inbox preview).
 2. **Outer table** ~600px max width, centered; `role="presentation"` on layout tables; adequate padding on small screens (fluid width where safe).
-3. **Header row:** Lab Nexus (or VCL) wordmark or text mark, **primary** background or bottom border using **border** token; optional small tagline.
+3. **Header row:** Vehicle Computing Lab (or VCL) wordmark or text mark, **primary** background or bottom border using **border** token; optional small tagline.
 4. **Body slot:** white or **muted** panel with **radius** implied via padding (many clients ignore `border-radius` on nested elements—acceptable if corners are square in some clients).
 5. **Footer row:** org name, link to app base URL, **manage notifications** / support line when user prefs exist; plain-text unsubscribe or preference link where policy requires it.
 6. **Primary CTA:** bulletproof button pattern (table cell, background **primary**, padding, **primary-foreground** text); always duplicate **plain link** under the button for accessibility and client quirks.

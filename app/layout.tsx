@@ -19,7 +19,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Lab Nexus — Vehicle Computing Lab",
+  title: "Vehicle Computing Lab",
   description: "Laboratory inventory and equipment checkout",
 };
 

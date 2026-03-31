@@ -6,7 +6,6 @@ import { loginSchema } from "@/lib/schemas/login";
 import { getRequestIp } from "@/lib/request-ip";
 import { rateLimit } from "@/lib/rate-limit";
 import { AuthError } from "next-auth";
-import { redirect } from "next/navigation";
 
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 30;
@@ -33,14 +32,11 @@ export async function loginAction(
   }
 
   try {
-    const result = await signIn("credentials", {
+    await signIn("credentials", {
       email: parsed.data.email,
       password: parsed.data.password,
-      redirect: false,
+      redirectTo: "/dashboard",
     });
-    if (result && typeof result === "object" && "error" in result && result.error) {
-      return failure({ formError: "Invalid email or password." });
-    }
   } catch (e) {
     if (e instanceof AuthError) {
       return failure({ formError: "Invalid email or password." });
@@ -48,5 +44,5 @@ export async function loginAction(
     throw e;
   }
 
-  redirect("/");
+  return { ok: true };
 }

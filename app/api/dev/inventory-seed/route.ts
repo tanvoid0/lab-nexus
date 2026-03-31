@@ -81,6 +81,6 @@ export async function GET(req: Request) {
   }
   return NextResponse.json({
     description:
-      "POST with Bearer SEED_SECRET. Body: { items } or { loadDefaultFile: true } (optional prisma/data/inventory-seed.json or synthetic). Validates with assetCreateSchema.",
+      "POST with Bearer SEED_SECRET. Body: { items } or { loadDefaultFile: true } (optional prisma/data/inventory-seed.json or synthetic). Validates with assetCreateSchema; rows may include imageUrl, and synthetic rows persist placeholder images into /uploads.",
   });
 }

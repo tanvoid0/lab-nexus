@@ -59,7 +59,7 @@ export function ProjectMembersPanel({
           Members
         </CardTitle>
         <CardDescription>
-          Lab accounts on this project (must already exist in Lab Nexus).
+          Lab accounts on this project (must already exist in Vehicle Computing Lab).
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">

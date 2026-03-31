@@ -30,17 +30,26 @@ enum AuditEntityType {
   User
 }
 
-/// Batch loan request from cart; students may need approval before checkouts are created.
+/// Batch checkout request from a user's request list; approval and issuance are tracked separately.
 enum CheckoutRequestStatus {
   PENDING_APPROVAL
-  FULFILLED
+  READY_FOR_PICKUP
+  COMPLETED
   REJECTED
 }
 
 enum CheckoutRequestLineStatus {
   PENDING
-  FULFILLED
+  APPROVED
+  ISSUED
   REJECTED
+}
+
+enum ProjectStatus {
+  PLANNED
+  IN_PROGRESS
+  ON_HOLD
+  DONE
 }
 
 enum AuditAction {
@@ -84,6 +93,7 @@ model User {
   settings                  UserSettings?
   checkoutRequests          CheckoutRequest[]
   reviewedCheckoutRequests  CheckoutRequest[]  @relation("CheckoutRequestReviewer")
+  issuedCheckoutRequests    CheckoutRequest[]  @relation("CheckoutRequestIssuer")
   userCart                  UserCart?
   assistantInboxes          AssistantInbox[]
 
@@ -119,7 +129,7 @@ model AssistantConversation {
   @@index([inboxId, updatedAt])
 }
 
-/// Borrow cart draft persisted server-side so it survives sign-out / new sessions.
+/// Request-list draft persisted server-side so selections survive sign-out / new sessions.
 model UserCart {
   id               String   @id @default(auto()) @map("_id") @db.ObjectId
   userId           String   @unique @db.ObjectId
@@ -193,6 +203,7 @@ model Project {
   id             String   @id @default(auto()) @map("_id") @db.ObjectId
   name           String
   slug           String?  @unique
+  status         ProjectStatus @default(PLANNED)
   /// Long-form summary (markdown-friendly plain text).
   description    String?
   /// [{ "label": "…", "url": "https://…" }] — external references (repos, wikis).
@@ -305,7 +316,7 @@ model Checkout {
   asset            Asset               @relation(fields: [assetId], references: [id], onDelete: Cascade)
   assetUnit        AssetUnit?          @relation(fields: [assetUnitId], references: [id])
   project          Project?            @relation(fields: [projectId], references: [id])
-  /// Cart fulfillments that point at this checkout (0 or 1 in practice; no DB unique on nullable FK — Mongo rejects duplicate nulls on unique indexes).
+  /// Request-line issuances that point at this checkout (0 or 1 in practice; no DB unique on nullable FK — Mongo rejects duplicate nulls on unique indexes).
   cartFulfillmentLines CheckoutRequestLine[]
 
   @@index([userId])
@@ -326,12 +337,15 @@ model CheckoutRequest {
   reviewerUserId   String?                @db.ObjectId
   reviewedAt       DateTime?
   reviewNote       String?
+  issuerUserId     String?                @db.ObjectId
+  issuedAt         DateTime?
   createdAt        DateTime               @default(now())
   updatedAt        DateTime               @updatedAt
 
   user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   defaultProject Project?               @relation("CheckoutRequestDefaultProject", fields: [defaultProjectId], references: [id])
   reviewer       User?                  @relation("CheckoutRequestReviewer", fields: [reviewerUserId], references: [id])
+  issuer         User?                  @relation("CheckoutRequestIssuer", fields: [issuerUserId], references: [id])
   lines          CheckoutRequestLine[]
 
   @@index([userId])

@@ -9,7 +9,7 @@ export type StoredConversation = {
   messages: ChatTurn[];
 };
 
-const STORAGE_KEY = "lab-nexus-assistant-chats-v1";
+const STORAGE_KEY = "vehicle-computing-lab-assistant-chats-v1";
 
 export const MAX_STORED_CHATS = 20;
 

@@ -11,7 +11,6 @@ import {
 import { getRequestIp } from "@/lib/request-ip";
 import { rateLimit } from "@/lib/rate-limit";
 import { AuthError } from "next-auth";
-import { redirect } from "next/navigation";
 
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 30;
@@ -43,23 +42,20 @@ export async function devQuickLoginAction(
         : DEMO_STUDENT_EMAIL;
 
   try {
-    const result = await signIn("credentials", {
+    await signIn("credentials", {
       email,
       password: getDemoPasswordPlain(),
-      redirect: false,
+      redirectTo: "/dashboard",
     });
-    if (result && typeof result === "object" && "error" in result && result.error) {
-      return failure({
-        formError:
-          "Dev quick login failed. Run pnpm db:seed and ensure the database matches this dev environment.",
-      });
-    }
   } catch (e) {
     if (e instanceof AuthError) {
-      return failure({ formError: "Dev quick login failed." });
+      return failure({
+        formError:
+          "Quick sign-in failed. Run pnpm db:seed and make sure this database matches the local demo users.",
+      });
     }
     throw e;
   }
 
-  redirect("/");
+  return { ok: true };
 }

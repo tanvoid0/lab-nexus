@@ -16,7 +16,7 @@ export default function LoginPage() {
             priority
           />
         </span>
-        <h1 className="text-xl font-semibold text-primary">Lab Nexus</h1>
+        <h1 className="text-xl font-semibold text-primary">Vehicle Computing Lab</h1>
         <p className="text-sm text-muted-foreground">
           Sign in with your lab account
         </p>
@@ -24,11 +24,8 @@ export default function LoginPage() {
       <LoginForm />
       {process.env.NODE_ENV === "development" ? (
         <p className="mt-8 max-w-md text-center text-xs text-muted-foreground">
-          Local development: after seeding the database, use{" "}
-          <strong>Login as admin</strong>, <strong>Login as staff</strong>, or{" "}
-          <strong>Login as student</strong> on the form, or sign in manually. Demo
-          credentials are not shown on deployed
-          builds.
+          Local development: after seeding the database, use the demo account buttons on the form
+          or sign in manually. Demo credentials are not shown on deployed builds.
         </p>
       ) : null}
       <ContinueToAppLink />

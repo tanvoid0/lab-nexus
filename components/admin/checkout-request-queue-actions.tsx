@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import {
   approveCheckoutRequestAction,
+  issueCheckoutRequestAction,
   rejectCheckoutRequestAction,
   rejectCheckoutRequestLineAction,
 } from "@/lib/actions/checkout-request";
@@ -25,7 +26,24 @@ export function ApproveRequestForm({ requestId }: { requestId: string }) {
         </p>
       ) : null}
       <Button type="submit" className="gap-2">
-        Approve pending lines
+        Approve for pickup
+      </Button>
+    </form>
+  );
+}
+
+export function IssueRequestForm({ requestId }: { requestId: string }) {
+  const [state, formAction] = useActionState(issueCheckoutRequestAction, initial);
+  return (
+    <form action={formAction} className="inline-flex flex-col gap-2">
+      <input type="hidden" name="requestId" value={requestId} />
+      {!state.ok && state.formError ? (
+        <p className="max-w-xs text-sm text-destructive" role="alert">
+          {state.formError}
+        </p>
+      ) : null}
+      <Button type="submit" className="gap-2">
+        Issue approved items
       </Button>
     </form>
   );
@@ -42,7 +60,7 @@ export function RejectRequestForm({ requestId }: { requestId: string }) {
       <Textarea
         id={`reject-note-${requestId}`}
         name="note"
-        placeholder="Reason if rejecting all pending lines…"
+        placeholder="Reason if rejecting the whole request…"
         rows={2}
       />
       {!state.ok && state.formError ? (
@@ -51,7 +69,7 @@ export function RejectRequestForm({ requestId }: { requestId: string }) {
         </p>
       ) : null}
       <Button type="submit" variant="destructive" size="sm">
-        Reject all pending
+        Reject request
       </Button>
     </form>
   );
@@ -63,7 +81,7 @@ export function RejectLineForm({ lineId }: { lineId: string }) {
     <form action={formAction} className="flex w-full max-w-md flex-col gap-2 lg:w-auto lg:min-w-[280px]">
       <input type="hidden" name="lineId" value={lineId} />
       <Label htmlFor={`reason-${lineId}`} className="text-xs">
-        Reject only this line
+        Reject this line
       </Label>
       <Input
         id={`reason-${lineId}`}

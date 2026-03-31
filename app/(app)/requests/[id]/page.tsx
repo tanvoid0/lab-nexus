@@ -12,9 +12,11 @@ import type { NextPageProps } from "@/lib/types/next-app";
 function lineStatusLabel(s: CheckoutRequestLineStatus) {
   switch (s) {
     case CheckoutRequestLineStatus.PENDING:
-      return "Pending approval";
-    case CheckoutRequestLineStatus.FULFILLED:
-      return "Assigned to you";
+      return "Pending review";
+    case CheckoutRequestLineStatus.APPROVED:
+      return "Approved for pickup";
+    case CheckoutRequestLineStatus.ISSUED:
+      return "Issued";
     case CheckoutRequestLineStatus.REJECTED:
       return "Rejected";
     default:
@@ -36,6 +38,7 @@ export default async function LoanRequestDetailPage({
       user: { select: { name: true, email: true } },
       defaultProject: { select: { name: true } },
       reviewer: { select: { name: true, email: true } },
+      issuer: { select: { name: true, email: true } },
       lines: {
         orderBy: { createdAt: "asc" },
         include: {
@@ -51,21 +54,33 @@ export default async function LoanRequestDetailPage({
   if (req.userId !== session!.user!.id && !isStaff) notFound();
 
   const pendingApproval = req.status === CheckoutRequestStatus.PENDING_APPROVAL;
+  const readyForPickup = req.status === CheckoutRequestStatus.READY_FOR_PICKUP;
+  const completed = req.status === CheckoutRequestStatus.COMPLETED;
   const steps: { key: string; label: string; state: "done" | "current" | "upcoming" }[] = [
     { key: "submitted", label: "Submitted", state: "done" },
     {
       key: "review",
-      label: "Awaiting approval",
+      label: "Pending review",
       state: pendingApproval ? "current" : "done",
     },
     {
+      key: "pickup",
+      label: readyForPickup ? "Ready for pickup" : completed ? "Ready for pickup" : "Pickup",
+      state: pendingApproval ? "upcoming" : readyForPickup ? "current" : completed ? "done" : "upcoming",
+    },
+    {
       key: "outcome",
-      label: pendingApproval
-        ? "Resolution"
-        : req.status === CheckoutRequestStatus.FULFILLED
-          ? "Assigned"
-          : "Not approved",
-      state: pendingApproval ? "upcoming" : "done",
+      label: completed ? "Issued" : req.status === CheckoutRequestStatus.REJECTED ? "Not approved" : "Issued",
+      state:
+        req.status === CheckoutRequestStatus.REJECTED
+          ? "done"
+          : completed
+            ? "done"
+            : readyForPickup
+              ? "upcoming"
+              : pendingApproval
+                ? "upcoming"
+                : "upcoming",
     },
   ];
 
@@ -74,7 +89,7 @@ export default async function LoanRequestDetailPage({
       <div>
         <p className="text-sm text-muted-foreground">
           <Link href="/requests" className="text-primary underline-offset-4 hover:underline">
-            Loan requests
+            Requests
           </Link>
         </p>
         <h1 className="mt-1 text-2xl font-semibold text-primary">Request detail</h1>
@@ -114,17 +129,24 @@ export default async function LoanRequestDetailPage({
               <div>
                 <p className="font-medium">{s.label}</p>
                 {s.key === "submitted" ? (
-                  <p className="text-xs text-muted-foreground">Cart submitted to the lab.</p>
+                  <p className="text-xs text-muted-foreground">Request submitted to the lab.</p>
                 ) : null}
                 {s.key === "review" ? (
                   <p className="text-xs text-muted-foreground">
                     Staff confirm availability and policy.
                   </p>
                 ) : null}
+                {s.key === "pickup" ? (
+                  <p className="text-xs text-muted-foreground">
+                    Approved items wait here until staff hand them over.
+                  </p>
+                ) : null}
                 {s.key === "outcome" ? (
                   <p className="text-xs text-muted-foreground">
-                    {req.status === CheckoutRequestStatus.FULFILLED
-                      ? "Equipment is on your account as active checkouts."
+                    {completed
+                      ? "Equipment has been issued and is now on your account."
+                      : readyForPickup
+                        ? "Your request is approved and waiting for pickup."
                       : req.status === CheckoutRequestStatus.REJECTED
                         ? "This request was not approved."
                         : "—"}
@@ -151,6 +173,12 @@ export default async function LoanRequestDetailPage({
                 {req.reviewedAt ? ` · ${req.reviewedAt.toLocaleString()}` : ""}
               </span>
             ) : null}
+          </p>
+        ) : null}
+        {req.issuer ? (
+          <p className="mt-3 text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">Issued by:</span> {req.issuer.name || req.issuer.email}
+            {req.issuedAt ? ` · ${req.issuedAt.toLocaleString()}` : ""}
           </p>
         ) : null}
       </section>
@@ -193,8 +221,10 @@ export default async function LoanRequestDetailPage({
                 <div className="flex flex-col items-start gap-2 sm:items-end">
                   <span
                     className={
-                      line.status === CheckoutRequestLineStatus.FULFILLED
+                      line.status === CheckoutRequestLineStatus.ISSUED
                         ? "inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary"
+                        : line.status === CheckoutRequestLineStatus.APPROVED
+                          ? "inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300"
                         : line.status === CheckoutRequestLineStatus.REJECTED
                           ? "inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive"
                           : "inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium"
@@ -207,7 +237,7 @@ export default async function LoanRequestDetailPage({
                       href="/checkouts"
                       className="text-xs font-medium text-primary underline-offset-4 hover:underline"
                     >
-                      View active checkout
+                      View issued checkout
                     </Link>
                   ) : null}
                 </div>

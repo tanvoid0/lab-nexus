@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCartPlus, faMicrochip } from "@fortawesome/free-solid-svg-icons";
+import { faListCheck, faMicrochip } from "@fortawesome/free-solid-svg-icons";
 import { toast } from "sonner";
 import { useCart } from "@/components/providers/cart-provider";
 import { Button } from "@/components/ui/button";
@@ -44,11 +44,11 @@ export function AddToCartInventoryCell({ row }: { row: AssetListItem }) {
           name: row.name,
           skuOrInternalId: row.skuOrInternalId,
         });
-        toast.success(`${row.name} added to cart.`);
+        toast.success(`${row.name} added to your request list.`);
       }}
     >
-      <FontAwesomeIcon icon={faCartPlus} className="size-3.5" />
-      {inCart ? "Added" : "Add"}
+      <FontAwesomeIcon icon={faListCheck} className="size-3.5" />
+      {inCart ? "Selected" : "Add to list"}
     </Button>
   );
 }

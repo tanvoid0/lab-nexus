@@ -7,14 +7,16 @@ type PrismaRoot = typeof prisma;
 /** Mirrors `CheckoutRequestLineStatus` in prisma/schema.prisma */
 const LineStatus = {
   PENDING: "PENDING",
-  FULFILLED: "FULFILLED",
+  APPROVED: "APPROVED",
+  ISSUED: "ISSUED",
   REJECTED: "REJECTED",
 } as const;
 
 /** Mirrors `CheckoutRequestStatus` in prisma/schema.prisma */
 const RequestStatus = {
   PENDING_APPROVAL: "PENDING_APPROVAL",
-  FULFILLED: "FULFILLED",
+  READY_FOR_PICKUP: "READY_FOR_PICKUP",
+  COMPLETED: "COMPLETED",
   REJECTED: "REJECTED",
 } as const;
 
@@ -43,7 +45,7 @@ type CheckoutRequestFlowClient = {
     }): Promise<CheckoutRequestLineRow[]>;
     update(args: {
       where: { id: string };
-      data: { status: string; checkoutId: string };
+      data: { status: string; checkoutId?: string };
     }): Promise<unknown>;
     updateMany(args: {
       where: { requestId: string; status: string };
@@ -68,7 +70,7 @@ function asCheckoutRequestClient(
   return db as unknown as CheckoutRequestFlowClient;
 }
 
-/** Recompute request status from its lines (pending / fulfilled / all rejected). */
+/** Recompute request status from its lines (pending / approved / issued / all rejected). */
 export async function syncCheckoutRequestStatus(
   db: PrismaRoot | Prisma.TransactionClient,
   requestId: string,
@@ -77,14 +79,17 @@ export async function syncCheckoutRequestStatus(
   const lines = await client.checkoutRequestLine.findMany({ where: { requestId } });
   if (lines.length === 0) return;
   const pending = lines.filter((l) => l.status === LineStatus.PENDING);
-  const fulfilled = lines.filter((l) => l.status === LineStatus.FULFILLED);
+  const approved = lines.filter((l) => l.status === LineStatus.APPROVED);
+  const issued = lines.filter((l) => l.status === LineStatus.ISSUED);
   let status: (typeof RequestStatus)[keyof typeof RequestStatus];
   if (pending.length > 0) {
     status = RequestStatus.PENDING_APPROVAL;
-  } else if (fulfilled.length === 0) {
-    status = RequestStatus.REJECTED;
+  } else if (approved.length > 0) {
+    status = RequestStatus.READY_FOR_PICKUP;
+  } else if (issued.length > 0) {
+    status = RequestStatus.COMPLETED;
   } else {
-    status = RequestStatus.FULFILLED;
+    status = RequestStatus.REJECTED;
   }
   await client.checkoutRequest.update({
     where: { id: requestId },
@@ -92,8 +97,31 @@ export async function syncCheckoutRequestStatus(
   });
 }
 
-/** Fulfill every still-pending line on a request (used after approval). */
-export async function fulfillPendingCheckoutRequestLines(
+/** Mark every still-pending line on a request approved and ready for pickup. */
+export async function approvePendingCheckoutRequestLines(
+  tx: Prisma.TransactionClient,
+  requestId: string,
+) {
+  const client = asCheckoutRequestClient(tx);
+  const req = await client.checkoutRequest.findUnique({
+    where: { id: requestId },
+    include: { lines: { orderBy: { createdAt: "asc" } } },
+  });
+  if (!req) throw new Error("Request not found.");
+  for (const line of req.lines) {
+    if (line.status !== LineStatus.PENDING) continue;
+    await client.checkoutRequestLine.update({
+      where: { id: line.id },
+      data: {
+        status: LineStatus.APPROVED,
+      },
+    });
+  }
+  await syncCheckoutRequestStatus(tx, requestId);
+}
+
+/** Issue every approved line on a request into active checkouts. */
+export async function issueApprovedCheckoutRequestLines(
   tx: Prisma.TransactionClient,
   params: {
     requestId: string;
@@ -111,7 +139,7 @@ export async function fulfillPendingCheckoutRequestLines(
   });
   if (!req) throw new Error("Request not found.");
   for (const line of req.lines) {
-    if (line.status !== LineStatus.PENDING) continue;
+    if (line.status !== LineStatus.APPROVED) continue;
     const projectId = line.projectId ?? req.defaultProjectId ?? undefined;
     const res = await createSingleCheckout(tx, {
       userId: params.borrowerUserId,
@@ -131,7 +159,7 @@ export async function fulfillPendingCheckoutRequestLines(
     await client.checkoutRequestLine.update({
       where: { id: line.id },
       data: {
-        status: LineStatus.FULFILLED,
+        status: LineStatus.ISSUED,
         checkoutId: res.checkoutId,
       },
     });

@@ -10,8 +10,8 @@ import {
   faBars,
   faBell,
   faBoxesStacked,
-  faCartShopping,
   faClipboardList,
+  faClipboardCheck,
   faDiagramProject,
   faHouse,
   faTruckRampBox,
@@ -55,6 +55,8 @@ type NavItem = {
   badgeCount?: number;
 };
 
+const APP_CONTENT_WIDTH = "max-w-[96rem] 2xl:max-w-[112rem]";
+
 function navActive(pathname: string, href: string) {
   if (pathname === href) return true;
   if (href === "/") return false;
@@ -80,7 +82,7 @@ function NavBadge({
   );
 }
 
-function CartToolbarLink({
+function RequestListToolbarLink({
   pathname,
   itemCount,
   cartHydrated,
@@ -96,8 +98,8 @@ function CartToolbarLink({
   const badgeCount = cartHydrated && itemCount > 0 ? itemCount : undefined;
   const label =
     badgeCount != null
-      ? `Cart, ${badgeCount} item${badgeCount === 1 ? "" : "s"}`
-      : "Cart";
+      ? `Request list, ${badgeCount} item${badgeCount === 1 ? "" : "s"} selected`
+      : "Request list";
 
   return (
     <Button
@@ -110,7 +112,7 @@ function CartToolbarLink({
           "h-11 w-11 bg-white/15 text-primary-foreground hover:bg-white/25 sm:h-9 sm:w-9",
         !isHeader &&
           active &&
-          "border-primary bg-primary/10 text-primary shadow-sm",
+          "border-primary bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:text-primary-foreground",
         isHeader && active && "ring-2 ring-white/35 ring-offset-0",
       )}
     >
@@ -121,11 +123,11 @@ function CartToolbarLink({
         aria-current={active ? "page" : undefined}
       >
         <span className="relative inline-flex items-center justify-center">
-          <FontAwesomeIcon icon={faCartShopping} className="size-4 opacity-90" />
+          <FontAwesomeIcon icon={faClipboardCheck} className="size-4 opacity-90" />
           {badgeCount != null ? (
             <NavBadge
               count={badgeCount}
-              ariaLabel={`${badgeCount} item${badgeCount === 1 ? "" : "s"} in cart`}
+              ariaLabel={`${badgeCount} item${badgeCount === 1 ? "" : "s"} in request list`}
             />
           ) : null}
         </span>
@@ -153,7 +155,7 @@ function DesktopSidebarNav({
             className={cn(
               "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
               active
-                ? "bg-primary/10 text-primary"
+                ? "bg-primary text-primary-foreground shadow-sm"
                 : "text-foreground hover:bg-muted",
             )}
           >
@@ -173,28 +175,45 @@ function DesktopSidebarNav({
 
 function MobileSheetNav({
   items,
+  pathname,
   onNavigate,
 }: {
   items: NavItem[];
+  pathname: string;
   onNavigate: () => void;
 }) {
   return (
     <nav className="flex flex-col gap-1 px-3 pb-4 pt-1" aria-label="Main">
-      {items.map((item) => (
-        <SheetClose key={item.href} asChild>
-          <Link
-            href={item.href}
-            onClick={onNavigate}
-            className="flex min-h-12 items-center gap-3 rounded-lg px-3 py-2.5 text-base font-medium text-foreground transition-colors hover:bg-muted active:bg-muted/80"
-          >
-            <span className="relative inline-flex w-6 justify-center">
-              <FontAwesomeIcon icon={item.icon} className="size-5 text-primary opacity-90" />
-              {item.badgeCount != null ? <NavBadge count={item.badgeCount} /> : null}
-            </span>
-            {item.label}
-          </Link>
-        </SheetClose>
-      ))}
+      {items.map((item) => {
+        const active = navActive(pathname, item.href);
+        return (
+          <SheetClose key={item.href} asChild>
+            <Link
+              href={item.href}
+              onClick={onNavigate}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "flex min-h-12 items-center gap-3 rounded-lg px-3 py-2.5 text-base font-medium transition-colors",
+                active
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-foreground hover:bg-muted active:bg-muted/80",
+              )}
+            >
+              <span className="relative inline-flex w-6 justify-center">
+                <FontAwesomeIcon
+                  icon={item.icon}
+                  className={cn(
+                    "size-5 opacity-90",
+                    active ? "text-primary-foreground" : "text-primary",
+                  )}
+                />
+                {item.badgeCount != null ? <NavBadge count={item.badgeCount} /> : null}
+              </span>
+              {item.label}
+            </Link>
+          </SheetClose>
+        );
+      })}
     </nav>
   );
 }
@@ -202,7 +221,7 @@ function MobileSheetNav({
 function BrandLogoLink({ className }: { className?: string }) {
   return (
     <Link
-      href="/"
+      href="/dashboard"
       className={cn("flex min-w-0 items-center gap-2.5 font-semibold", className)}
     >
       <span className="relative block size-9 shrink-0">
@@ -215,7 +234,7 @@ function BrandLogoLink({ className }: { className?: string }) {
           priority
         />
       </span>
-      <span className="min-w-0 leading-tight">Lab Nexus</span>
+      <span className="min-w-0 leading-tight">Vehicle Computing Lab</span>
     </Link>
   );
 }
@@ -233,10 +252,10 @@ export function AppShell({
   const { itemCount, hydrated: cartHydrated } = useCart();
 
   const navItems: NavItem[] = [
-    { href: "/", label: "Home", icon: faHouse },
+    { href: "/dashboard", label: "Home", icon: faHouse },
     { href: "/inventory", label: "Inventory", icon: faBoxesStacked },
-    { href: "/requests", label: "Loan requests", icon: faTruckRampBox },
-    { href: "/checkouts", label: "Checkouts", icon: faClipboardList },
+    { href: "/requests", label: "Requests", icon: faTruckRampBox },
+    { href: "/checkouts", label: "Issued items", icon: faClipboardList },
     { href: "/projects", label: "Projects", icon: faDiagramProject },
     {
       href: "/notifications",
@@ -312,14 +331,15 @@ export function AppShell({
                     </SheetClose>
                   </div>
                 </div>
-                <MobileSheetNav
-                  items={navItems}
-                  onNavigate={() => setMobileNavOpen(false)}
-                />
+                    <MobileSheetNav
+                      items={navItems}
+                      pathname={pathname}
+                      onNavigate={() => setMobileNavOpen(false)}
+                    />
               </SheetContent>
             </Sheet>
             <Link
-              href="/"
+              href="/dashboard"
               className="flex min-w-0 flex-1 items-center gap-2.5 font-semibold"
             >
               <span className="relative block size-9 shrink-0">
@@ -331,10 +351,10 @@ export function AppShell({
                   sizes="36px"
                 />
               </span>
-              <span className="min-w-0 truncate">Lab Nexus</span>
+              <span className="min-w-0 truncate">Vehicle Computing Lab</span>
             </Link>
             <div className="flex shrink-0 items-center gap-2">
-              <CartToolbarLink
+              <RequestListToolbarLink
                 pathname={pathname}
                 itemCount={itemCount}
                 cartHydrated={cartHydrated}
@@ -350,10 +370,15 @@ export function AppShell({
         </header>
 
         <div className="sticky top-0 z-30 hidden shrink-0 border-b border-border bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/80 md:block">
-          <div className="mx-auto flex h-14 w-full max-w-6xl min-w-0 items-center gap-3 px-4 2xl:px-8">
+          <div
+            className={cn(
+              "mx-auto flex h-14 w-full min-w-0 items-center gap-3 px-4 xl:px-6 2xl:px-8",
+              APP_CONTENT_WIDTH,
+            )}
+          >
             <AppBreadcrumbs className="min-w-0 flex-1 overflow-hidden" />
             <div className="flex shrink-0 items-center gap-2">
-              <CartToolbarLink
+              <RequestListToolbarLink
                 pathname={pathname}
                 itemCount={itemCount}
                 cartHydrated={cartHydrated}
@@ -372,7 +397,12 @@ export function AppShell({
           <AppBreadcrumbs />
         </div>
 
-        <main className="mx-auto w-full max-w-6xl flex-1 px-3 py-6 sm:px-4 sm:py-8 2xl:px-8">
+        <main
+          className={cn(
+            "mx-auto w-full flex-1 px-3 py-6 sm:px-4 sm:py-8 xl:px-6 2xl:px-8",
+            APP_CONTENT_WIDTH,
+          )}
+        >
           {children}
         </main>
         </div>

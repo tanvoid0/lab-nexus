@@ -1,5 +1,5 @@
 export const INVENTORY_OPTIONAL_COLUMNS_STORAGE_KEY =
-  "lab-nexus-inventory-optional-columns-v1";
+  "vehicle-computing-lab-inventory-optional-columns-v1";
 
 export const INVENTORY_OPTIONAL_COLUMN_IDS = [
   "category",
